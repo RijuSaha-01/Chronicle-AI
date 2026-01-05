@@ -1,11 +1,9 @@
-# Habit Cinematic 🎬
+# Chronicle AI 🎬
 
 **Turn your daily diary logs into episodic stories with cinematic elements.**
 
-Imagine your daily life turned into episodes of a TV series about you. Every day becomes an episode with a title, acts (morning/day/night), scenes (key events), and even cinematic shot descriptions. Over time, see your recurring heroes (good habits) and villains (bad patterns) and track your character arc.
-
 ## 🌟 Project Vision
-Habit Cinematic is designed to bridge the gap between habit tracking and storytelling. By framing our daily actions as part of a narrative, we can gain a fresh perspective on our choices, celebrate our wins as "hero moments," and recognize negative patterns as "recurring villains." The goal is to make personal growth feel like a cinematic journey.
+Chronicle AI is designed to bridge the gap between habit tracking and storytelling. By framing our daily actions as part of a narrative, we can gain a fresh perspective on our choices, celebrate our wins as "hero moments," and recognize negative patterns as "recurring villains." The goal is to make personal growth feel like a cinematic journey.
 
 ## ✨ Features (Planned)
 - **Episodic Transformation**: Automatically structure diary entries into morning, day, and night acts.

@@ -3,7 +3,9 @@ import datetime
 from pathlib import Path
 from typing import List, Dict, Optional
 
-DB_NAME = "habit_cinematic.db"
+import argparse
+
+DB_NAME = "chronicle_ai.db"
 
 def get_db_path() -> str:
     """Returns the path to the database file."""
@@ -60,12 +62,31 @@ def list_entries() -> List[Dict]:
     
     return [dict(row) for row in rows]
 
-if __name__ == "__main__":
-    # Simple test when running the module directly
+def main():
+    parser = argparse.ArgumentParser(description="Chronicle AI - Daily Diary CLI")
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+
+    # Add command
+    add_parser = subparsers.add_parser("add", help="Add a new diary entry")
+    add_parser.add_argument("text", type=str, help="The diary entry text")
+    add_parser.add_argument("--date", type=str, help="Optional date in YYYY-MM-DD format")
+
+    # List command (useful for verification)
+    subparsers.add_parser("list", help="List all diary entries")
+
+    args = parser.parse_args()
+
     init_db()
-    print("Database initialized.")
-    create_entry("Today I started the Habit Cinematic project.", "2023-10-27")
-    create_entry("Another productive day coding.")
-    print("Entries:")
-    for entry in list_entries():
-        print(entry)
+
+    if args.command == "add":
+        create_entry(args.text, args.date)
+        print(f"Added entry for {args.date or datetime.date.today().isoformat()}")
+    elif args.command == "list":
+        entries = list_entries()
+        for entry in entries:
+            print(f"[{entry['date']}] {entry['raw_text']}")
+    else:
+        parser.print_help()
+
+if __name__ == "__main__":
+    main()
