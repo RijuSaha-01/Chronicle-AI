@@ -1,0 +1,334 @@
+"""
+Chronicle AI - Command Line Interface
+
+Full-featured CLI for diary management with guided input, AI processing, and exports.
+"""
+
+import argparse
+import sys
+from datetime import date
+
+from .models import Entry
+from .repository import get_repository
+from .llm_client import process_entry, is_ollama_available
+from .exports import export_entry_to_markdown, export_weekly, export_daily
+
+
+# Guided mode questions
+GUIDED_QUESTIONS = [
+    ("🌅 How was your morning?", "morning"),
+    ("☀️ What happened in the afternoon?", "afternoon"),
+    ("🌙 How did your day end?", "evening"),
+    ("💭 Any notable thoughts or reflections?", "thoughts"),
+    ("😊 How was your overall mood today?", "mood"),
+]
+
+
+def cmd_add(args):
+    """Handle the 'add' command - create a quick entry."""
+    repo = get_repository()
+    
+    entry_date = args.date or date.today().isoformat()
+    entry = Entry(
+        date=entry_date,
+        raw_text=args.text
+    )
+    
+    print(f"✨ Creating entry for {entry_date}...")
+    
+    if not args.skip_ai:
+        print("🤖 Generating narrative and title with Ollama...")
+        if is_ollama_available():
+            process_entry(entry)
+            print(f"📝 Title: {entry.title}")
+        else:
+            print("⚠️  Ollama not available, saving raw text only")
+    
+    repo.create_entry(entry)
+    print(f"✅ Entry saved successfully! (ID: {entry.id})")
+
+
+def cmd_guided(args):
+    """Handle the 'guided' command - interactive Q&A entry."""
+    repo = get_repository()
+    entry_date = args.date or date.today().isoformat()
+    
+    print(f"\n🎬 Chronicle AI - Guided Entry for {entry_date}")
+    print("=" * 50)
+    print("Answer the following questions about your day.")
+    print("Press Enter to skip any question.\n")
+    
+    responses = []
+    
+    for question, key in GUIDED_QUESTIONS:
+        try:
+            answer = input(f"{question}\n> ").strip()
+            if answer:
+                responses.append(f"{key.title()}: {answer}")
+        except (EOFError, KeyboardInterrupt):
+            print("\n\n❌ Entry cancelled.")
+            return
+    
+    if not responses:
+        print("\n⚠️  No responses provided. Entry not saved.")
+        return
+    
+    # Combine responses into raw text
+    raw_text = "\n\n".join(responses)
+    
+    print("\n" + "=" * 50)
+    print("📋 Your entry preview:\n")
+    print(raw_text)
+    print("\n" + "=" * 50)
+    
+    try:
+        confirm = input("\n💾 Save this entry? (Y/n): ").strip().lower()
+        if confirm == 'n':
+            print("❌ Entry not saved.")
+            return
+    except (EOFError, KeyboardInterrupt):
+        print("\n❌ Entry cancelled.")
+        return
+    
+    entry = Entry(
+        date=entry_date,
+        raw_text=raw_text
+    )
+    
+    if not args.skip_ai:
+        print("\n🤖 Generating narrative and title with Ollama...")
+        if is_ollama_available():
+            process_entry(entry)
+            print(f"\n📖 Generated Narrative:\n{entry.narrative_text}\n")
+            print(f"🎬 Episode Title: {entry.title}")
+        else:
+            print("⚠️  Ollama not available, saving raw text only")
+    
+    repo.create_entry(entry)
+    print(f"\n✅ Entry saved successfully! (ID: {entry.id})")
+
+
+def cmd_list(args):
+    """Handle the 'list' command - show recent entries."""
+    repo = get_repository()
+    
+    limit = args.limit or 10
+    entries = repo.list_recent_entries(limit)
+    
+    if not entries:
+        print("📭 No entries found.")
+        return
+    
+    print(f"\n🎬 Chronicle AI - Recent Episodes ({len(entries)} entries)")
+    print("=" * 60)
+    
+    for entry in entries:
+        title = entry.display_title()
+        snippet = entry.snippet(80)
+        
+        print(f"\n📅 [{entry.date}] ID: {entry.id}")
+        print(f"   🎬 {title}")
+        print(f"   📝 {snippet}")
+    
+    print("\n" + "=" * 60)
+
+
+def cmd_view(args):
+    """Handle the 'view' command - show a single entry."""
+    repo = get_repository()
+    
+    entry = repo.get_entry_by_id(args.id)
+    
+    if not entry:
+        print(f"❌ Entry with ID {args.id} not found.")
+        return
+    
+    print(f"\n🎬 {entry.display_title()}")
+    print("=" * 60)
+    print(f"📅 Date: {entry.date}")
+    print(f"🆔 ID: {entry.id}")
+    print()
+    
+    if entry.narrative_text:
+        print("📖 Narrative:")
+        print("-" * 40)
+        print(entry.narrative_text)
+        print()
+    
+    print("📝 Original Entry:")
+    print("-" * 40)
+    print(entry.raw_text)
+    print("\n" + "=" * 60)
+
+
+def cmd_export(args):
+    """Handle the 'export' command - generate Markdown files."""
+    if args.weekly:
+        print("📚 Exporting weekly summary...")
+        filepath = export_weekly()
+        if filepath:
+            print(f"✅ Weekly export saved to: {filepath}")
+        else:
+            print("⚠️  No entries found for weekly export.")
+    elif args.date:
+        print(f"📝 Exporting entry for {args.date}...")
+        filepath = export_daily(args.date)
+        if filepath:
+            print(f"✅ Daily export saved to: {filepath}")
+        else:
+            print(f"⚠️  No entries found for {args.date}.")
+    elif args.id:
+        repo = get_repository()
+        entry = repo.get_entry_by_id(args.id)
+        if entry:
+            filepath = export_entry_to_markdown(entry)
+            print(f"✅ Entry exported to: {filepath}")
+        else:
+            print(f"❌ Entry with ID {args.id} not found.")
+    else:
+        print("📚 Exporting all entries...")
+        from .exports import export_all_entries
+        files = export_all_entries()
+        print(f"✅ Exported {len(files)} entries.")
+
+
+def cmd_regenerate(args):
+    """Handle the 'regenerate' command - re-generate AI content for an entry."""
+    repo = get_repository()
+    
+    entry = repo.get_entry_by_id(args.id)
+    if not entry:
+        print(f"❌ Entry with ID {args.id} not found.")
+        return
+    
+    print(f"🔄 Regenerating AI content for entry {args.id}...")
+    
+    if not is_ollama_available():
+        print("❌ Ollama is not available. Cannot regenerate.")
+        return
+    
+    # Clear existing and regenerate
+    entry.narrative_text = None
+    entry.title = None
+    process_entry(entry)
+    
+    repo.update_entry(entry)
+    
+    print(f"\n🎬 New Title: {entry.title}")
+    print(f"\n📖 New Narrative:\n{entry.narrative_text}")
+    print(f"\n✅ Entry updated successfully!")
+
+
+def cmd_status(args):
+    """Handle the 'status' command - show system status."""
+    repo = get_repository()
+    entries = repo.list_entries()
+    
+    print("\n🎬 Chronicle AI Status")
+    print("=" * 40)
+    print(f"📊 Total entries: {len(entries)}")
+    
+    # Count entries with AI content
+    with_narrative = sum(1 for e in entries if e.narrative_text)
+    with_title = sum(1 for e in entries if e.title)
+    
+    print(f"📖 With narrative: {with_narrative}")
+    print(f"🎬 With title: {with_title}")
+    print()
+    
+    # Ollama status
+    if is_ollama_available():
+        print("✅ Ollama: Connected")
+    else:
+        print("⚠️  Ollama: Not available")
+    
+    print("=" * 40)
+
+
+def create_parser() -> argparse.ArgumentParser:
+    """Create and configure the argument parser."""
+    parser = argparse.ArgumentParser(
+        prog="chronicle-ai",
+        description="🎬 Chronicle AI - Turn your daily diary into episodic stories",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  chronicle-ai add "Had a productive morning, wrote some code"
+  chronicle-ai guided
+  chronicle-ai list --limit 5
+  chronicle-ai view 1
+  chronicle-ai export --weekly
+        """
+    )
+    
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+    
+    # Add command
+    add_parser = subparsers.add_parser("add", help="Add a quick diary entry")
+    add_parser.add_argument("text", type=str, help="The diary entry text")
+    add_parser.add_argument("--date", type=str, help="Date in YYYY-MM-DD format (default: today)")
+    add_parser.add_argument("--skip-ai", action="store_true", help="Skip AI narrative/title generation")
+    
+    # Guided command
+    guided_parser = subparsers.add_parser("guided", help="Interactive guided entry mode")
+    guided_parser.add_argument("--date", type=str, help="Date in YYYY-MM-DD format (default: today)")
+    guided_parser.add_argument("--skip-ai", action="store_true", help="Skip AI narrative/title generation")
+    
+    # List command
+    list_parser = subparsers.add_parser("list", help="List recent entries")
+    list_parser.add_argument("--limit", "-n", type=int, default=10, help="Number of entries to show (default: 10)")
+    
+    # View command
+    view_parser = subparsers.add_parser("view", help="View a single entry by ID")
+    view_parser.add_argument("id", type=int, help="Entry ID to view")
+    
+    # Export command
+    export_parser = subparsers.add_parser("export", help="Export entries to Markdown")
+    export_group = export_parser.add_mutually_exclusive_group()
+    export_group.add_argument("--weekly", "-w", action="store_true", help="Export weekly summary")
+    export_group.add_argument("--date", "-d", type=str, help="Export specific date (YYYY-MM-DD)")
+    export_group.add_argument("--id", type=int, help="Export specific entry by ID")
+    
+    # Regenerate command
+    regen_parser = subparsers.add_parser("regenerate", help="Regenerate AI content for an entry")
+    regen_parser.add_argument("id", type=int, help="Entry ID to regenerate")
+    
+    # Status command
+    subparsers.add_parser("status", help="Show system status")
+    
+    return parser
+
+
+def main():
+    """Main CLI entry point."""
+    parser = create_parser()
+    args = parser.parse_args()
+    
+    if args.command is None:
+        parser.print_help()
+        return
+    
+    # Route to appropriate handler
+    commands = {
+        "add": cmd_add,
+        "guided": cmd_guided,
+        "list": cmd_list,
+        "view": cmd_view,
+        "export": cmd_export,
+        "regenerate": cmd_regenerate,
+        "status": cmd_status,
+    }
+    
+    handler = commands.get(args.command)
+    if handler:
+        try:
+            handler(args)
+        except KeyboardInterrupt:
+            print("\n\n👋 Goodbye!")
+            sys.exit(0)
+    else:
+        parser.print_help()
+
+
+if __name__ == "__main__":
+    main()

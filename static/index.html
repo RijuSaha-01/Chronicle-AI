@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chronicle AI - Your Life, Episodic</title>
+    <meta name="description" content="Transform your daily diary into cinematic episodes with AI-powered narratives.">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap"
+        rel="stylesheet">
+
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+    <!-- TOP NAVIGATION -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <!-- Logo & Brand -->
+            <div class="brand">
+                <div class="brand-text">
+                    <span class="brand-name">Chronicle AI</span>
+                    <span class="brand-tagline">Your Life, Episodic</span>
+                </div>
+            </div>
+
+            <!-- Nav Links -->
+            <div class="nav-links">
+                <button class="nav-link active" data-view="episodes">
+                    <span class="nav-link-icon">📺</span>
+                    <span>Episodes</span>
+                </button>
+                <button class="nav-link" data-view="create">
+                    <span class="nav-link-icon">✍️</span>
+                    <span>Create</span>
+                </button>
+            </div>
+
+            <!-- AI Status -->
+            <div class="nav-status">
+                <div id="ai-status" class="status-indicator checking">
+                    <span class="status-dot"></span>
+                    <span class="status-label">AI</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- MAIN CONTENT AREA -->
+    <main class="app-main">
+
+        <!-- VIEW: EPISODES DASHBOARD -->
+        <section id="view-episodes" class="view active">
+            <div class="view-container">
+                <div class="view-header">
+                    <div>
+                        <h1 class="view-title">Your Chronicle</h1>
+                        <p class="view-subtitle">Recent episodes from your story</p>
+                    </div>
+                    <button id="btn-refresh" class="btn-icon" title="Refresh">
+                        <svg width="20" height="20" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd"
+                                d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" />
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Episodes Grid -->
+                <div id="episodes-container" class="episodes-grid">
+                    <!-- Injected by JS -->
+                </div>
+            </div>
+        </section>
+
+        <!-- VIEW: CREATE ENTRY -->
+        <section id="view-create" class="view">
+            <div class="view-container">
+                <div class="view-header">
+                    <h1 class="view-title">Create Episode</h1>
+                    <p class="view-subtitle">Choose your format</p>
+                </div>
+
+                <!-- Mode Selector -->
+                <div class="mode-selector">
+                    <button class="mode-btn active" data-mode="quick">
+                        <span class="mode-icon">⚡</span>
+                        <span class="mode-label">Quick Entry</span>
+                        <span class="mode-desc">Fast capture for busy days</span>
+                    </button>
+                    <button class="mode-btn" data-mode="guided">
+                        <span class="mode-icon">🧭</span>
+                        <span class="mode-label">Guided Reflection</span>
+                        <span class="mode-desc">Structured daily review</span>
+                    </button>
+                </div>
+
+                <!-- Quick Entry Form -->
+                <div id="form-quick" class="entry-form active">
+                    <form class="form-card">
+                        <div class="form-body">
+                            <div class="form-group">
+                                <label for="input-quick-text">What happened today?</label>
+                                <textarea id="input-quick-text" rows="8" placeholder="Today was..." required></textarea>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="input-quick-date">Date</label>
+                                    <input type="date" id="input-quick-date">
+                                </div>
+                                <div class="form-group">
+                                    <label class="checkbox-wrapper">
+                                        <input type="checkbox" id="input-skip-ai">
+                                        <span>Skip AI processing</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-footer">
+                            <button type="submit" class="btn-primary" id="btn-submit-quick">
+                                <span class="btn-content">Generate Episode</span>
+                                <span class="btn-loader" hidden>Processing...</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Guided Entry Form -->
+                <div id="form-guided" class="entry-form">
+                    <form class="form-card">
+                        <div class="form-body">
+                            <div class="guided-sections">
+                                <div class="guided-section">
+                                    <label for="input-morning">🌅 Morning</label>
+                                    <textarea id="input-morning" rows="3"
+                                        placeholder="How did you start your day?"></textarea>
+                                </div>
+                                <div class="guided-section">
+                                    <label for="input-afternoon">☀️ Afternoon</label>
+                                    <textarea id="input-afternoon" rows="3"
+                                        placeholder="What happened during the day?"></textarea>
+                                </div>
+                                <div class="guided-section">
+                                    <label for="input-evening">🌙 Evening</label>
+                                    <textarea id="input-evening" rows="3"
+                                        placeholder="How did you wind down?"></textarea>
+                                </div>
+                                <div class="guided-section">
+                                    <label for="input-thoughts">💭 Reflections</label>
+                                    <textarea id="input-thoughts" rows="3"
+                                        placeholder="Any thoughts or insights?"></textarea>
+                                </div>
+                                <div class="guided-section compact">
+                                    <label for="input-mood">😊 Mood</label>
+                                    <input type="text" id="input-mood" placeholder="e.g., Hopeful, Tired, Excited">
+                                </div>
+                                <div class="guided-section compact">
+                                    <label for="input-guided-date">Date</label>
+                                    <input type="date" id="input-guided-date">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-footer">
+                            <button type="submit" class="btn-primary" id="btn-submit-guided">
+                                <span class="btn-content">Generate Episode</span>
+                                <span class="btn-loader" hidden>Processing...</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- MODAL: EPISODE DETAIL -->
+    <div id="modal-episode" class="modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <button class="modal-close" aria-label="Close">
+                <svg width="24" height="24" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd"
+                        d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" />
+                </svg>
+            </button>
+            <div id="modal-body">
+                <!-- Injected by JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST NOTIFICATIONS -->
+    <div id="toast-container"></div>
+
+    <script src="/static/app.js"></script>
+</body>
+
+</html>

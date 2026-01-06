@@ -159,3 +159,12 @@ cython_debug/
 # SQLite databases
 *.db
 *.sqlite
+
+# Chronicle AI specific
+# =======================
+# Ignore generated export files (but keep the directory structure via .gitkeep)
+exports/daily/*.md
+exports/weekly/*.md
+
+# Local data files
+data/

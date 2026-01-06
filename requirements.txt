@@ -1,0 +1,15 @@
+# Chronicle AI Dependencies
+# =========================
+# Core web framework and API
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.0.0
+
+# HTTP client (for Ollama API calls)
+httpx>=0.25.0
+
+# Development tools
+python-multipart>=0.0.6
+
+# Optional: Alternative HTTP client if httpx unavailable
+requests>=2.31.0
