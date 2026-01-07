@@ -14,6 +14,7 @@ from .models import Entry
 from .repository import EntryRepository, get_repository
 from .llm_client import generate_narrative, generate_title, process_entry
 from .exports import export_entry_to_markdown, export_weekly
+from .processor import segment_diary_text
 
 __all__ = [
     "__version__",
@@ -25,4 +26,5 @@ __all__ = [
     "process_entry",
     "export_entry_to_markdown",
     "export_weekly",
+    "segment_diary_text",
 ]
