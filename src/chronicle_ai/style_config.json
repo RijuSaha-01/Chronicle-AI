@@ -1,0 +1,83 @@
+{
+    "camera_angles": [
+        "close-up",
+        "wide shot",
+        "tracking shot",
+        "low angle",
+        "high angle",
+        "bird's-eye view",
+        "handheld shaky cam",
+        "static long shot",
+        "over-the-shoulder"
+    ],
+    "lighting": [
+        "harsh fluorescent",
+        "golden hour warmth",
+        "moody noir shadows",
+        "bright overhead glare",
+        "soft candlelight",
+        "neon glow",
+        "dappled sunlight",
+        "sterile laboratory white"
+    ],
+    "atmospheres": [
+        "heavy with anticipation",
+        "quiet and reflective",
+        "chaotic energy",
+        "melancholic silence",
+        "vibrant and bustling",
+        "eerie stillness",
+        "warm and cozy",
+        "tense and hurried"
+    ],
+    "mood_mappings": {
+        "productive": {
+            "camera": "tracking shot",
+            "lighting": "bright overhead glare",
+            "atmosphere": "vibrant and bustling"
+        },
+        "reflective": {
+            "camera": "close-up",
+            "lighting": "soft candlelight",
+            "atmosphere": "quiet and reflective"
+        },
+        "stressful": {
+            "camera": "handheld shaky cam",
+            "lighting": "harsh fluorescent",
+            "atmosphere": "chaotic energy"
+        },
+        "relaxed": {
+            "camera": "wide shot",
+            "lighting": "golden hour warmth",
+            "atmosphere": "heavy with anticipation"
+        },
+        "mysterious": {
+            "camera": "low angle",
+            "lighting": "moody noir shadows",
+            "atmosphere": "eerie stillness"
+        }
+    },
+    "sensory_elements": {
+        "sounds": [
+            "the distant hum of traffic",
+            "the crisp rustle of paper",
+            "a faint ticking clock",
+            "the rhythmic beat of rain",
+            "muffled voices from another room"
+        ],
+        "textures": [
+            "cool smooth glass",
+            "rough worn leather",
+            "the soft grit of pavement",
+            "a light breeze against the skin",
+            "the weight of a heavy pen"
+        ],
+        "smells": [
+            "lingering coffee",
+            "fresh rain on concrete",
+            "the sterile scent of ozone",
+            "old books and dust",
+            "faint woodsmoke"
+        ]
+    }
+}
