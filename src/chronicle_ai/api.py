@@ -50,6 +50,7 @@ class EntryResponse(BaseModel):
     raw_text: str
     narrative_text: Optional[str] = None
     title: Optional[str] = None
+    conflict_data: Optional[dict] = None
     
     class Config:
         from_attributes = True
@@ -240,7 +241,8 @@ async def list_entries(
                 date=e.date,
                 raw_text=e.raw_text,
                 narrative_text=e.narrative_text,
-                title=e.title
+                title=e.title,
+                conflict_data=e.conflict_data.to_dict() if e.conflict_data else None
             )
             for e in entries
         ],

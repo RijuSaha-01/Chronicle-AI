@@ -4,104 +4,23 @@ Chronicle AI - LLM Client
 Integration with local Ollama Llama 3.2 for narrative and title generation.
 """
 
-import os
-import json
 import logging
 from typing import Optional
 
+from .models import ConflictAnalysis
 from .style_guide import CinematicStyleGuide
+from .llm_utils import _make_request, is_ollama_available, OLLAMA_TIMEOUT
+from .conflict import ConflictDetector
 
-try:
-    import httpx
-    HTTPX_AVAILABLE = True
-except ImportError:
-    HTTPX_AVAILABLE = False
-
-try:
-    import requests
-    REQUESTS_AVAILABLE = True
-except ImportError:
-    REQUESTS_AVAILABLE = False
-
-
-# Configuration via environment variables
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")
-OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "60"))
-
-# Logging setup
-logger = logging.getLogger(__name__)
-
-
-class OllamaError(Exception):
-    """Custom exception for Ollama-related errors."""
-    pass
-
-
-# Initialize the Cinematic Style Guide
+# Initialize the Cinematic Style Guide and Conflict Detector
 style_guide = CinematicStyleGuide()
+conflict_detector = ConflictDetector()
 
 
-def _make_request(prompt: str, timeout: int = OLLAMA_TIMEOUT) -> Optional[str]:
-    """
-    Make a request to Ollama API.
-    
-    Args:
-        prompt: The prompt to send to the model
-        timeout: Request timeout in seconds
-        
-    Returns:
-        Generated text response or None if failed
-    """
-    url = f"{OLLAMA_BASE_URL}/api/generate"
-    payload = {
-        "model": OLLAMA_MODEL,
-        "prompt": prompt,
-        "stream": False
-    }
-    
-    try:
-        if HTTPX_AVAILABLE:
-            with httpx.Client(timeout=timeout) as client:
-                response = client.post(url, json=payload)
-                response.raise_for_status()
-                data = response.json()
-                return data.get("response", "").strip()
-        elif REQUESTS_AVAILABLE:
-            response = requests.post(url, json=payload, timeout=timeout)
-            response.raise_for_status()
-            data = response.json()
-            return data.get("response", "").strip()
-        else:
-            logger.warning("Neither httpx nor requests library available")
-            return None
-    except Exception as e:
-        logger.warning(f"Ollama request failed: {e}")
-        return None
+# Redundant functions removed as they are now in llm_utils
 
 
-def is_ollama_available() -> bool:
-    """
-    Check if Ollama is running and accessible.
-    
-    Returns:
-        True if Ollama is available, False otherwise
-    """
-    try:
-        url = f"{OLLAMA_BASE_URL}/api/tags"
-        if HTTPX_AVAILABLE:
-            with httpx.Client(timeout=5) as client:
-                response = client.get(url)
-                return response.status_code == 200
-        elif REQUESTS_AVAILABLE:
-            response = requests.get(url, timeout=5)
-            return response.status_code == 200
-        return False
-    except Exception:
-        return False
-
-
-def generate_narrative(raw_text: str, mood: Optional[str] = None) -> str:
+def generate_narrative(raw_text: str, mood: Optional[str] = None, conflict_data: Optional[ConflictAnalysis] = None) -> str:
     """
     Generate a narrative paragraph from raw diary text with cinematic enhancement.
     
@@ -111,6 +30,7 @@ def generate_narrative(raw_text: str, mood: Optional[str] = None) -> str:
     Args:
         raw_text: The user's raw diary entry text
         mood: Optional mood to guide the cinematic style
+        conflict_data: Optional ConflictAnalysis to drive the narrative structure
         
     Returns:
         Generated narrative paragraph or fallback text
@@ -134,12 +54,24 @@ def generate_narrative(raw_text: str, mood: Optional[str] = None) -> str:
         else:
             mood = "neutral"
     
+    # 1.5 Incorporate conflict data into the prompt
+    conflict_context = ""
+    if conflict_data:
+        conflict_context = f"\nCentral Conflict: {conflict_data.central_conflict}"
+        if conflict_data.internal_conflicts:
+            conflict_context += f"\nInternal Struggles: {', '.join(conflict_data.internal_conflicts)}"
+        if conflict_data.external_conflicts:
+            conflict_context += f"\nExternal Obstacles: {', '.join(conflict_data.external_conflicts)}"
+        conflict_context += f"\nTension Level: {conflict_data.tension_level}/10"
+    
     # 2. Prepare the base prompt
     base_prompt = f"""You are a creative writer helping to transform personal diary entries into engaging narrative prose.
 
 Transform the following diary entry into a short, cinematic narrative paragraph (2-4 sentences). 
 Write in third person, present tense, as if describing scenes from a movie about the protagonist's life.
 Keep it personal and emotionally resonant while maintaining the key events and feelings.
+Use the identified conflicts to drive the narrative, treating them as the 'inciting incidents' or 'climax' of the story acts.
+{conflict_context}
 
 Diary entry:
 {raw_text}"""
@@ -216,7 +148,18 @@ def ensure_narrative(entry) -> None:
         entry: Entry object to update (modified in place)
     """
     if not entry.narrative_text:
-        entry.narrative_text = generate_narrative(entry.raw_text)
+        entry.narrative_text = generate_narrative(entry.raw_text, conflict_data=entry.conflict_data)
+
+
+def ensure_conflict_analysis(entry) -> None:
+    """
+    Ensure an entry has conflict analysis data.
+    
+    Args:
+        entry: Entry object to update (modified in place)
+    """
+    if not entry.conflict_data:
+        entry.conflict_data = conflict_detector.analyze_entry(entry.raw_text)
 
 
 def ensure_title(entry) -> None:
@@ -244,5 +187,6 @@ def process_entry(entry) -> None:
     Args:
         entry: Entry object to process (modified in place)
     """
+    ensure_conflict_analysis(entry)
     ensure_narrative(entry)
     ensure_title(entry)

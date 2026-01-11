@@ -155,6 +155,19 @@ def cmd_view(args):
         print(entry.narrative_text)
         print()
     
+    if entry.conflict_data:
+        print("⚡ Conflict Analysis:")
+        print("-" * 40)
+        cd = entry.conflict_data
+        print(f"   🏆 Central: {cd.central_conflict}")
+        print(f"   🎭 Archetype: {cd.archetype}")
+        print(f"   📈 Tension: {'🔥' * cd.tension_level} ({cd.tension_level}/10)")
+        if cd.internal_conflicts:
+            print(f"   🧠 Internal: {', '.join(cd.internal_conflicts)}")
+        if cd.external_conflicts:
+            print(f"   🌍 External: {', '.join(cd.external_conflicts)}")
+        print()
+    
     print("📝 Original Entry:")
     print("-" * 40)
     print(entry.raw_text)

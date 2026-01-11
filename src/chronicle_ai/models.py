@@ -5,8 +5,42 @@ Defines the Entry model and related data structures for diary entries.
 """
 
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, List
 from datetime import date
+import json
+
+
+@dataclass
+class ConflictAnalysis:
+    """
+    Metadata about conflicts found in a diary entry.
+    """
+    internal_conflicts: List[str] = field(default_factory=list)  # doubt, fear, etc.
+    external_conflicts: List[str] = field(default_factory=list)  # deadlines, people, obstacles
+    tension_level: int = 1  # 1-10
+    archetype: str = "none"  # person vs self, vs environment, vs system, vs time
+    central_conflict: str = ""
+
+    def to_dict(self) -> dict:
+        return {
+            "internal_conflicts": self.internal_conflicts,
+            "external_conflicts": self.external_conflicts,
+            "tension_level": self.tension_level,
+            "archetype": self.archetype,
+            "central_conflict": self.central_conflict
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "ConflictAnalysis":
+        if not data:
+            return cls()
+        return cls(
+            internal_conflicts=data.get("internal_conflicts", []),
+            external_conflicts=data.get("external_conflicts", []),
+            tension_level=data.get("tension_level", 1),
+            archetype=data.get("archetype", "none"),
+            central_conflict=data.get("central_conflict", "")
+        )
 
 
 @dataclass
@@ -26,6 +60,7 @@ class Entry:
     raw_text: str = ""
     narrative_text: Optional[str] = None
     title: Optional[str] = None
+    conflict_data: Optional[ConflictAnalysis] = None
     
     def to_dict(self) -> dict:
         """Convert entry to dictionary for serialization."""
@@ -34,7 +69,8 @@ class Entry:
             "date": self.date,
             "raw_text": self.raw_text,
             "narrative_text": self.narrative_text,
-            "title": self.title
+            "title": self.title,
+            "conflict_data": self.conflict_data.to_dict() if self.conflict_data else None
         }
     
     @classmethod
@@ -45,7 +81,8 @@ class Entry:
             date=data.get("date", date.today().isoformat()),
             raw_text=data.get("raw_text", ""),
             narrative_text=data.get("narrative_text"),
-            title=data.get("title")
+            title=data.get("title"),
+            conflict_data=ConflictAnalysis.from_dict(data.get("conflict_data")) if data.get("conflict_data") else None
         )
     
     def snippet(self, max_length: int = 100) -> str:

@@ -5,11 +5,12 @@ SQLite-based storage for diary entries with full CRUD operations.
 """
 
 import sqlite3
+import json
 from pathlib import Path
 from typing import List, Optional
 from datetime import date, timedelta
 
-from .models import Entry
+from .models import Entry, ConflictAnalysis
 
 
 # Default database location (can be overridden via environment variable)
@@ -57,6 +58,8 @@ class EntryRepository:
                 cursor.execute("ALTER TABLE diary_entries ADD COLUMN narrative_text TEXT")
             if 'title' not in columns:
                 cursor.execute("ALTER TABLE diary_entries ADD COLUMN title TEXT")
+            if 'conflict_data' not in columns:
+                cursor.execute("ALTER TABLE diary_entries ADD COLUMN conflict_data TEXT")
         else:
             # Create table with all columns
             cursor.execute("""
@@ -65,7 +68,8 @@ class EntryRepository:
                     date TEXT NOT NULL,
                     raw_text TEXT NOT NULL,
                     narrative_text TEXT,
-                    title TEXT
+                    title TEXT,
+                    conflict_data TEXT
                 )
             """)
         
@@ -86,9 +90,15 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            """INSERT INTO diary_entries (date, raw_text, narrative_text, title) 
-               VALUES (?, ?, ?, ?)""",
-            (entry.date, entry.raw_text, entry.narrative_text, entry.title)
+            """INSERT INTO diary_entries (date, raw_text, narrative_text, title, conflict_data) 
+               VALUES (?, ?, ?, ?, ?)""",
+            (
+                entry.date, 
+                entry.raw_text, 
+                entry.narrative_text, 
+                entry.title,
+                json.dumps(entry.conflict_data.to_dict()) if entry.conflict_data else None
+            )
         )
         
         entry.id = cursor.lastrowid
@@ -115,9 +125,16 @@ class EntryRepository:
         
         cursor.execute(
             """UPDATE diary_entries 
-               SET date = ?, raw_text = ?, narrative_text = ?, title = ?
+               SET date = ?, raw_text = ?, narrative_text = ?, title = ?, conflict_data = ?
                WHERE id = ?""",
-            (entry.date, entry.raw_text, entry.narrative_text, entry.title, entry.id)
+            (
+                entry.date, 
+                entry.raw_text, 
+                entry.narrative_text, 
+                entry.title, 
+                json.dumps(entry.conflict_data.to_dict()) if entry.conflict_data else None,
+                entry.id
+            )
         )
         
         conn.commit()
@@ -139,14 +156,17 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            "SELECT id, date, raw_text, narrative_text, title FROM diary_entries WHERE id = ?",
+            "SELECT id, date, raw_text, narrative_text, title, conflict_data FROM diary_entries WHERE id = ?",
             (entry_id,)
         )
         row = cursor.fetchone()
         conn.close()
         
         if row:
-            return Entry.from_dict(dict(row))
+            data = dict(row)
+            if data.get("conflict_data"):
+                data["conflict_data"] = json.loads(data["conflict_data"])
+            return Entry.from_dict(data)
         return None
     
     def list_entries(self, limit: Optional[int] = None) -> List[Entry]:
@@ -170,7 +190,14 @@ class EntryRepository:
         rows = cursor.fetchall()
         conn.close()
         
-        return [Entry.from_dict(dict(row)) for row in rows]
+        entries = []
+        for row in rows:
+            data = dict(row)
+            if data.get("conflict_data"):
+                data["conflict_data"] = json.loads(data["conflict_data"])
+            entries.append(Entry.from_dict(data))
+            
+        return entries
     
     def list_recent_entries(self, n: int = 7) -> List[Entry]:
         """
@@ -199,7 +226,7 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            """SELECT id, date, raw_text, narrative_text, title 
+            """SELECT id, date, raw_text, narrative_text, title, conflict_data 
                FROM diary_entries 
                WHERE date >= ? AND date <= ?
                ORDER BY date DESC, id DESC""",
@@ -208,7 +235,14 @@ class EntryRepository:
         rows = cursor.fetchall()
         conn.close()
         
-        return [Entry.from_dict(dict(row)) for row in rows]
+        entries = []
+        for row in rows:
+            data = dict(row)
+            if data.get("conflict_data"):
+                data["conflict_data"] = json.loads(data["conflict_data"])
+            entries.append(Entry.from_dict(data))
+            
+        return entries
     
     def list_entries_last_n_days(self, days: int = 7) -> List[Entry]:
         """
