@@ -178,7 +178,15 @@ def cmd_view(args):
         print(f"❌ Entry with ID {args.id} not found.")
         return
     
+    pattern = "N/A"
+    if entry.title_options and entry.title:
+        for opt in entry.title_options:
+            if opt.get('title') == entry.title:
+                pattern = opt.get('pattern', 'N/A')
+                break
+
     print(f"\n🎬 {entry.display_title()}")
+    print(f"🎭 Pattern: {pattern}")
     print("=" * 60)
     print(f"📅 Date: {entry.date}")
     print(f"🆔 ID: {entry.id}")
@@ -292,6 +300,56 @@ def cmd_recap(args):
     print(f"🔗 Linked to {len(recap.entry_ids)} episodes from the last {days} days.")
 
 
+def cmd_retitle(args):
+    """Handle the 'retitle' command - explore and pick new titles."""
+    repo = get_repository()
+    entry = repo.get_entry_by_id(args.episode)
+    
+    if not entry:
+        print(f"❌ Episode {args.episode} not found.")
+        return
+    
+    print(f"🎬 Retitling Episode {args.episode}: {entry.display_title()}")
+    
+    if not entry.title_options:
+        print("🤖 No existing options found. Generating 5 new options...")
+        if not is_ollama_available():
+            print("❌ Ollama not available.")
+            return
+        from .llm_client import generate_title_options
+        entry.title_options = generate_title_options(entry.narrative_text or entry.raw_text)
+        repo.update_entry(entry)
+    
+    options = entry.title_options
+    
+    if args.pick:
+        print("\nChoose a new title for this episode:")
+        for idx, opt in enumerate(options, 1):
+            pattern = opt.get('pattern', 'N/A')
+            score = opt.get('score', 0)
+            print(f"{idx}. {opt['title']} [{pattern}] (Score: {score:.2f})")
+        
+        try:
+            choice = input(f"\nSelect option (1-{len(options)}) or 'q' to quit: ").strip().lower()
+            if choice == 'q':
+                return
+            idx = int(choice) - 1
+            if 0 <= idx < len(options):
+                entry.title = options[idx]['title']
+                repo.update_entry(entry)
+                print(f"✅ Title updated to: {entry.title}")
+            else:
+                print("❌ Invalid selection.")
+        except (ValueError, IndexError, EOFError, KeyboardInterrupt):
+            print("\n❌ Cancelled or invalid input.")
+    else:
+        print("\nAvailable Title Options:")
+        for opt in options:
+            pattern = opt.get('pattern', 'N/A')
+            score = opt.get('score', 0)
+            print(f"- {opt['title']} [{pattern}] (Score: {score:.2f})")
+
+
 def cmd_status(args):
     """Handle the 'status' command - show system status."""
     repo = get_repository()
@@ -366,9 +424,13 @@ Examples:
     export_group.add_argument("--date", "-d", type=str, help="Export specific date (YYYY-MM-DD)")
     export_group.add_argument("--id", type=int, help="Export specific entry by ID")
     
-    # Recap command
     recap_parser = subparsers.add_parser("recap", help="Generate a 'Previously on Chronicle...' summary")
     recap_parser.add_argument("--days", type=int, default=7, help="Number of days to analyze (default: 7)")
+    
+    # Retitle command
+    retitle_parser = subparsers.add_parser("retitle", help="Explore and pick new episode titles")
+    retitle_parser.add_argument("--episode", type=int, required=True, help="Episode ID to retitle")
+    retitle_parser.add_argument("--pick", action="store_true", help="Interactively pick from options")
     
     # Status command
     subparsers.add_parser("status", help="Show system status")
@@ -395,6 +457,7 @@ def main():
         "regenerate": cmd_regenerate,
         "status": cmd_status,
         "recap": cmd_recap,
+        "retitle": cmd_retitle,
     }
     
     handler = commands.get(args.command)

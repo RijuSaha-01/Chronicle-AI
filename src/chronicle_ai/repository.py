@@ -62,6 +62,8 @@ class EntryRepository:
                 cursor.execute("ALTER TABLE diary_entries ADD COLUMN conflict_data TEXT")
             if 'recap_id' not in columns:
                 cursor.execute("ALTER TABLE diary_entries ADD COLUMN recap_id INTEGER")
+            if 'title_options' not in columns:
+                cursor.execute("ALTER TABLE diary_entries ADD COLUMN title_options TEXT")
             
             # Create recaps table if it doesn't exist
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='recaps'")
@@ -83,6 +85,7 @@ class EntryRepository:
                     raw_text TEXT NOT NULL,
                     narrative_text TEXT,
                     title TEXT,
+                    title_options TEXT,
                     conflict_data TEXT,
                     recap_id INTEGER
                 )
@@ -113,13 +116,14 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            """INSERT INTO diary_entries (date, raw_text, narrative_text, title, conflict_data, recap_id) 
-               VALUES (?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO diary_entries (date, raw_text, narrative_text, title, title_options, conflict_data, recap_id) 
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
             (
                 entry.date, 
                 entry.raw_text, 
                 entry.narrative_text, 
                 entry.title,
+                json.dumps(entry.title_options) if entry.title_options else None,
                 json.dumps(entry.conflict_data.to_dict()) if entry.conflict_data else None,
                 entry.recap_id
             )
@@ -149,13 +153,14 @@ class EntryRepository:
         
         cursor.execute(
             """UPDATE diary_entries 
-               SET date = ?, raw_text = ?, narrative_text = ?, title = ?, conflict_data = ?, recap_id = ?
+               SET date = ?, raw_text = ?, narrative_text = ?, title = ?, title_options = ?, conflict_data = ?, recap_id = ?
                WHERE id = ?""",
             (
                 entry.date, 
                 entry.raw_text, 
                 entry.narrative_text, 
                 entry.title, 
+                json.dumps(entry.title_options) if entry.title_options else None,
                 json.dumps(entry.conflict_data.to_dict()) if entry.conflict_data else None,
                 entry.recap_id,
                 entry.id
@@ -181,7 +186,7 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            "SELECT id, date, raw_text, narrative_text, title, conflict_data, recap_id FROM diary_entries WHERE id = ?",
+            "SELECT id, date, raw_text, narrative_text, title, title_options, conflict_data, recap_id FROM diary_entries WHERE id = ?",
             (entry_id,)
         )
         row = cursor.fetchone()
@@ -191,6 +196,8 @@ class EntryRepository:
             data = dict(row)
             if data.get("conflict_data"):
                 data["conflict_data"] = json.loads(data["conflict_data"])
+            if data.get("title_options"):
+                data["title_options"] = json.loads(data["title_options"])
             return Entry.from_dict(data)
         return None
     
@@ -207,7 +214,7 @@ class EntryRepository:
         conn = self._get_connection()
         cursor = conn.cursor()
         
-        query = "SELECT id, date, raw_text, narrative_text, title FROM diary_entries ORDER BY date DESC, id DESC"
+        query = "SELECT id, date, raw_text, narrative_text, title, title_options, conflict_data, recap_id FROM diary_entries ORDER BY date DESC, id DESC"
         if limit:
             query += f" LIMIT {int(limit)}"
         
@@ -220,6 +227,8 @@ class EntryRepository:
             data = dict(row)
             if data.get("conflict_data"):
                 data["conflict_data"] = json.loads(data["conflict_data"])
+            if data.get("title_options"):
+                data["title_options"] = json.loads(data["title_options"])
             entries.append(Entry.from_dict(data))
             
         return entries
@@ -251,7 +260,7 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            """SELECT id, date, raw_text, narrative_text, title, conflict_data 
+            """SELECT id, date, raw_text, narrative_text, title, title_options, conflict_data, recap_id 
                FROM diary_entries 
                WHERE date >= ? AND date <= ?
                ORDER BY date DESC, id DESC""",
@@ -265,6 +274,8 @@ class EntryRepository:
             data = dict(row)
             if data.get("conflict_data"):
                 data["conflict_data"] = json.loads(data["conflict_data"])
+            if data.get("title_options"):
+                data["title_options"] = json.loads(data["title_options"])
             entries.append(Entry.from_dict(data))
             
         return entries

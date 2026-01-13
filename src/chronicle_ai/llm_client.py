@@ -5,7 +5,7 @@ Integration with local Ollama Llama 3.2 for narrative and title generation.
 """
 
 import logging
-from typing import Optional
+from typing import Optional, List, Dict
 
 from .models import ConflictAnalysis
 from .style_guide import CinematicStyleGuide
@@ -93,18 +93,68 @@ Diary entry:
     return style_guide.add_sensory_layer(fallback)
 
 
+def generate_title_options(text: str) -> List[Dict]:
+    """
+    Generate 5 title options using different patterns and scoring.
+    """
+    if not text or not text.strip():
+        return [{"title": "Untitled Episode", "score": 1.0, "pattern": "Default"}]
+    
+    prompt = f"""You are creating episode titles for a personal life documentary series.
+Analyze the following diary content and generate 5 title options using these patterns:
+1. 'The One Where...' (Friends style)
+2. Single evocative word ('Pilot', 'Crossroads', 'Aftermath')
+3. Song, book, or movie reference relevant to content
+4. Metaphorical title
+5. Direct dramatic statement
+
+For each title, provide a 'relevance_score' (0.0 to 1.0) based on how well it matches keywords and mood.
+Output the result as a raw JSON list of objects with 'title', 'pattern', and 'score' keys.
+Do not include any other text, only the JSON.
+
+Example:
+[
+  {{"title": "The One Where Dreams Collide", "pattern": "Friends-style", "score": 0.85}},
+  {{"title": "Crossroads", "pattern": "Single-word", "score": 0.92}}
+]
+
+Diary content:
+{text[:800]}
+
+JSON Output:"""
+
+    result = _make_request(prompt, timeout=40)
+    
+    if result:
+        try:
+            # Try to find JSON in the response if it's not raw
+            import json
+            import re
+            json_match = re.search(r'\[.*\]', result, re.DOTALL)
+            if json_match:
+                options = json.loads(json_match.group(0))
+                # Normalize and validate
+                valid_options = []
+                for opt in options:
+                    if isinstance(opt, dict) and "title" in opt:
+                        valid_options.append({
+                            "title": str(opt.get("title")).strip().strip('"\''),
+                            "pattern": str(opt.get("pattern", "Unknown")),
+                            "score": float(opt.get("score", 0.5))
+                        })
+                if valid_options:
+                    return valid_options
+        except Exception as e:
+            logging.error(f"Failed to parse title options JSON: {e}")
+
+    # Fallback to single generation or dummy options
+    title = generate_title(text) # Use the old one as fallback
+    return [{"title": title, "pattern": "Direct", "score": 0.5}]
+
+
 def generate_title(text: str) -> str:
     """
     Generate a catchy episode title from diary text.
-    
-    Creates a short, memorable title (3-7 words) that captures
-    the essence of the diary entry like a TV episode title.
-    
-    Args:
-        text: The diary entry text (raw or narrative)
-        
-    Returns:
-        Generated episode title or fallback
     """
     if not text or not text.strip():
         return "Untitled Episode"
@@ -123,18 +173,13 @@ Episode title:"""
     result = _make_request(prompt, timeout=30)
     
     if result:
-        # Clean up the result (remove quotes, extra whitespace)
         title = result.strip().strip('"\'').strip()
-        # Ensure reasonable length
         words = title.split()
         if len(words) > 8:
             title = ' '.join(words[:7])
         return title
     
-    # Fallback when Ollama is not available
-    logger.info("Using fallback title (Ollama offline)")
-    words = text.split()[:3]
-    return f"Episode: {' '.join(words)}..."
+    return "Untitled Episode"
 
 
 def ensure_narrative(entry) -> None:
@@ -164,17 +209,16 @@ def ensure_conflict_analysis(entry) -> None:
 
 def ensure_title(entry) -> None:
     """
-    Ensure an entry has a title, generating if needed.
-    
-    Modifies the entry object in place. Uses narrative_text if available,
-    otherwise falls back to raw_text for title generation.
-    
-    Args:
-        entry: Entry object to update (modified in place)
+    Ensure an entry has a title and title options, generating if needed.
     """
-    if not entry.title:
+    if not entry.title or not entry.title_options:
         text = entry.narrative_text or entry.raw_text
-        entry.title = generate_title(text)
+        options = generate_title_options(text)
+        entry.title_options = options
+        if options and not entry.title:
+            # Pick the highest scoring one
+            best_opt = max(options, key=lambda x: x.get('score', 0))
+            entry.title = best_opt['title']
 
 
 def process_entry(entry) -> None:

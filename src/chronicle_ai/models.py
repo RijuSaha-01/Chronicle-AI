@@ -90,6 +90,7 @@ class Entry:
     raw_text: str = ""
     narrative_text: Optional[str] = None
     title: Optional[str] = None
+    title_options: List[dict] = field(default_factory=list)  # List of {"title": str, "score": float, "pattern": str}
     conflict_data: Optional[ConflictAnalysis] = None
     recap_id: Optional[int] = None
     
@@ -101,6 +102,7 @@ class Entry:
             "raw_text": self.raw_text,
             "narrative_text": self.narrative_text,
             "title": self.title,
+            "title_options": self.title_options,
             "conflict_data": self.conflict_data.to_dict() if self.conflict_data else None,
             "recap_id": self.recap_id
         }
@@ -114,6 +116,7 @@ class Entry:
             raw_text=data.get("raw_text", ""),
             narrative_text=data.get("narrative_text"),
             title=data.get("title"),
+            title_options=data.get("title_options", []),
             conflict_data=ConflictAnalysis.from_dict(data.get("conflict_data")) if data.get("conflict_data") else None,
             recap_id=data.get("recap_id")
         )
