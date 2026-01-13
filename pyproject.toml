@@ -53,6 +53,7 @@ dev = [
 
 [project.scripts]
 chronicle-ai = "chronicle_ai.cli:main"
+chronicle = "chronicle_ai.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

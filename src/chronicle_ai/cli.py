@@ -11,6 +11,7 @@ from datetime import date
 from .models import Entry
 from .repository import get_repository
 from .llm_client import process_entry, is_ollama_available
+from .recap import RecapGenerator
 from .exports import export_entry_to_markdown, export_weekly, export_daily
 
 
@@ -39,7 +40,26 @@ def cmd_add(args):
     if not args.skip_ai:
         print("🤖 Generating narrative and title with Ollama...")
         if is_ollama_available():
+            # If recap is requested, generate it first
+            if getattr(args, 'with_recap', False):
+                print("📺 Generating 'Previously on Chronicle...' recap...")
+                generator = RecapGenerator(repo)
+                recap = generator.get_recap_for_days(args.recap_days or 7)
+                repo.create_recap(recap)
+                entry.recap_id = recap.id
+                print(f"🎬 Recap generated: {recap.id}")
+                
+                # Prepend recap to narrative (this will be handled after process_entry if we want it preserved)
+                # Or we can pass it to process_entry?
+            
             process_entry(entry)
+            
+            # Prepend recap content if it exists
+            if entry.recap_id:
+                recap = repo.get_recap_by_id(entry.recap_id)
+                if recap and recap.content:
+                    entry.narrative_text = f"{recap.content}\n\n{entry.narrative_text}"
+            
             print(f"📝 Title: {entry.title}")
         else:
             print("⚠️  Ollama not available, saving raw text only")
@@ -98,7 +118,22 @@ def cmd_guided(args):
     if not args.skip_ai:
         print("\n🤖 Generating narrative and title with Ollama...")
         if is_ollama_available():
+            # If recap is requested, generate it first
+            if args.with_recap:
+                print("📺 Generating 'Previously on Chronicle...' recap...")
+                generator = RecapGenerator(repo)
+                recap = generator.get_recap_for_days(args.recap_days or 7)
+                repo.create_recap(recap)
+                entry.recap_id = recap.id
+            
             process_entry(entry)
+            
+            # Prepend recap content if it exists
+            if entry.recap_id:
+                recap = repo.get_recap_by_id(entry.recap_id)
+                if recap and recap.content:
+                    entry.narrative_text = f"{recap.content}\n\n{entry.narrative_text}"
+            
             print(f"\n📖 Generated Narrative:\n{entry.narrative_text}\n")
             print(f"🎬 Episode Title: {entry.title}")
         else:
@@ -205,6 +240,9 @@ def cmd_export(args):
         print(f"✅ Exported {len(files)} entries.")
 
 
+    print(f"\n✅ Entry updated successfully!")
+
+
 def cmd_regenerate(args):
     """Handle the 'regenerate' command - re-generate AI content for an entry."""
     repo = get_repository()
@@ -230,6 +268,28 @@ def cmd_regenerate(args):
     print(f"\n🎬 New Title: {entry.title}")
     print(f"\n📖 New Narrative:\n{entry.narrative_text}")
     print(f"\n✅ Entry updated successfully!")
+
+
+def cmd_recap(args):
+    """Handle the 'recap' command - generate a standalone recap."""
+    repo = get_repository()
+    generator = RecapGenerator(repo)
+    
+    days = args.days or 7
+    print(f"📺 Generating 'Previously on Chronicle...' recap for the last {days} days...")
+    
+    if not is_ollama_available():
+        print("❌ Ollama is not available. Cannot generate recap.")
+        return
+    
+    recap = generator.get_recap_for_days(days)
+    repo.create_recap(recap)
+    
+    print("\n" + "=" * 60)
+    print(recap.content)
+    print("=" * 60)
+    print(f"✅ Recap generated and saved! (ID: {recap.id})")
+    print(f"🔗 Linked to {len(recap.entry_ids)} episodes from the last {days} days.")
 
 
 def cmd_status(args):
@@ -281,11 +341,15 @@ Examples:
     add_parser.add_argument("text", type=str, help="The diary entry text")
     add_parser.add_argument("--date", type=str, help="Date in YYYY-MM-DD format (default: today)")
     add_parser.add_argument("--skip-ai", action="store_true", help="Skip AI narrative/title generation")
+    add_parser.add_argument("--with-recap", action="store_true", help="Prepend a 'Previously on' recap to the narrative")
+    add_parser.add_argument("--recap-days", type=int, default=7, help="Number of days to include in recap (default: 7)")
     
     # Guided command
     guided_parser = subparsers.add_parser("guided", help="Interactive guided entry mode")
     guided_parser.add_argument("--date", type=str, help="Date in YYYY-MM-DD format (default: today)")
     guided_parser.add_argument("--skip-ai", action="store_true", help="Skip AI narrative/title generation")
+    guided_parser.add_argument("--with-recap", action="store_true", help="Prepend a 'Previously on' recap to the narrative")
+    guided_parser.add_argument("--recap-days", type=int, default=7, help="Number of days to include in recap (default: 7)")
     
     # List command
     list_parser = subparsers.add_parser("list", help="List recent entries")
@@ -302,9 +366,9 @@ Examples:
     export_group.add_argument("--date", "-d", type=str, help="Export specific date (YYYY-MM-DD)")
     export_group.add_argument("--id", type=int, help="Export specific entry by ID")
     
-    # Regenerate command
-    regen_parser = subparsers.add_parser("regenerate", help="Regenerate AI content for an entry")
-    regen_parser.add_argument("id", type=int, help="Entry ID to regenerate")
+    # Recap command
+    recap_parser = subparsers.add_parser("recap", help="Generate a 'Previously on Chronicle...' summary")
+    recap_parser.add_argument("--days", type=int, default=7, help="Number of days to analyze (default: 7)")
     
     # Status command
     subparsers.add_parser("status", help="Show system status")
@@ -330,6 +394,7 @@ def main():
         "export": cmd_export,
         "regenerate": cmd_regenerate,
         "status": cmd_status,
+        "recap": cmd_recap,
     }
     
     handler = commands.get(args.command)

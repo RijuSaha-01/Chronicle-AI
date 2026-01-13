@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import List, Optional
 from datetime import date, timedelta
 
-from .models import Entry, ConflictAnalysis
+from .models import Entry, ConflictAnalysis, Recap
 
 
 # Default database location (can be overridden via environment variable)
@@ -60,6 +60,20 @@ class EntryRepository:
                 cursor.execute("ALTER TABLE diary_entries ADD COLUMN title TEXT")
             if 'conflict_data' not in columns:
                 cursor.execute("ALTER TABLE diary_entries ADD COLUMN conflict_data TEXT")
+            if 'recap_id' not in columns:
+                cursor.execute("ALTER TABLE diary_entries ADD COLUMN recap_id INTEGER")
+            
+            # Create recaps table if it doesn't exist
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='recaps'")
+            if cursor.fetchone() is None:
+                cursor.execute("""
+                    CREATE TABLE recaps (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        date TEXT NOT NULL,
+                        content TEXT NOT NULL,
+                        entry_ids TEXT NOT NULL
+                    )
+                """)
         else:
             # Create table with all columns
             cursor.execute("""
@@ -69,7 +83,16 @@ class EntryRepository:
                     raw_text TEXT NOT NULL,
                     narrative_text TEXT,
                     title TEXT,
-                    conflict_data TEXT
+                    conflict_data TEXT,
+                    recap_id INTEGER
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE recaps (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    date TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    entry_ids TEXT NOT NULL
                 )
             """)
         
@@ -90,14 +113,15 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            """INSERT INTO diary_entries (date, raw_text, narrative_text, title, conflict_data) 
-               VALUES (?, ?, ?, ?, ?)""",
+            """INSERT INTO diary_entries (date, raw_text, narrative_text, title, conflict_data, recap_id) 
+               VALUES (?, ?, ?, ?, ?, ?)""",
             (
                 entry.date, 
                 entry.raw_text, 
                 entry.narrative_text, 
                 entry.title,
-                json.dumps(entry.conflict_data.to_dict()) if entry.conflict_data else None
+                json.dumps(entry.conflict_data.to_dict()) if entry.conflict_data else None,
+                entry.recap_id
             )
         )
         
@@ -125,7 +149,7 @@ class EntryRepository:
         
         cursor.execute(
             """UPDATE diary_entries 
-               SET date = ?, raw_text = ?, narrative_text = ?, title = ?, conflict_data = ?
+               SET date = ?, raw_text = ?, narrative_text = ?, title = ?, conflict_data = ?, recap_id = ?
                WHERE id = ?""",
             (
                 entry.date, 
@@ -133,6 +157,7 @@ class EntryRepository:
                 entry.narrative_text, 
                 entry.title, 
                 json.dumps(entry.conflict_data.to_dict()) if entry.conflict_data else None,
+                entry.recap_id,
                 entry.id
             )
         )
@@ -156,7 +181,7 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            "SELECT id, date, raw_text, narrative_text, title, conflict_data FROM diary_entries WHERE id = ?",
+            "SELECT id, date, raw_text, narrative_text, title, conflict_data, recap_id FROM diary_entries WHERE id = ?",
             (entry_id,)
         )
         row = cursor.fetchone()
@@ -281,6 +306,85 @@ class EntryRepository:
         conn.close()
         
         return deleted
+
+    # --- Recap Methods ---
+
+    def create_recap(self, recap: Recap) -> Recap:
+        """Create a new recap in the database."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute(
+            """INSERT INTO recaps (date, content, entry_ids) 
+               VALUES (?, ?, ?)""",
+            (
+                recap.date,
+                recap.content,
+                json.dumps(recap.entry_ids)
+            )
+        )
+        
+        recap.id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        
+        return recap
+
+    def get_recap_by_id(self, recap_id: int) -> Optional[Recap]:
+        """Retrieve a recap by its ID."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute(
+            "SELECT id, date, content, entry_ids FROM recaps WHERE id = ?",
+            (recap_id,)
+        )
+        row = cursor.fetchone()
+        conn.close()
+        
+        if row:
+            data = dict(row)
+            data["entry_ids"] = json.loads(data["entry_ids"])
+            return Recap.from_dict(data)
+        return None
+
+    def get_latest_recap(self) -> Optional[Recap]:
+        """Retrieve the most recent recap."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute(
+            "SELECT id, date, content, entry_ids FROM recaps ORDER BY date DESC, id DESC LIMIT 1"
+        )
+        row = cursor.fetchone()
+        conn.close()
+        
+        if row:
+            data = dict(row)
+            data["entry_ids"] = json.loads(data["entry_ids"])
+            return Recap.from_dict(data)
+        return None
+
+    def list_recaps(self, limit: Optional[int] = None) -> List[Recap]:
+        """List recaps ordered by date descending."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        query = "SELECT id, date, content, entry_ids FROM recaps ORDER BY date DESC, id DESC"
+        if limit:
+            query += f" LIMIT {int(limit)}"
+        
+        cursor.execute(query)
+        rows = cursor.fetchall()
+        conn.close()
+        
+        recaps = []
+        for row in rows:
+            data = dict(row)
+            data["entry_ids"] = json.loads(data["entry_ids"])
+            recaps.append(Recap.from_dict(data))
+            
+        return recaps
 
 
 # Global repository instance for convenience

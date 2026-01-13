@@ -44,6 +44,36 @@ class ConflictAnalysis:
 
 
 @dataclass
+class Recap:
+    """
+    Generated summary of previous episodes.
+    """
+    id: Optional[int] = None
+    date: str = field(default_factory=lambda: date.today().isoformat())
+    content: str = ""
+    entry_ids: List[int] = field(default_factory=list)  # IDs of entries summarized
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "date": self.date,
+            "content": self.content,
+            "entry_ids": self.entry_ids
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Recap":
+        if not data:
+            return cls()
+        return cls(
+            id=data.get("id"),
+            date=data.get("date", date.today().isoformat()),
+            content=data.get("content", ""),
+            entry_ids=data.get("entry_ids", [])
+        )
+
+
+@dataclass
 class Entry:
     """
     Represents a single diary entry with optional AI-generated content.
@@ -61,6 +91,7 @@ class Entry:
     narrative_text: Optional[str] = None
     title: Optional[str] = None
     conflict_data: Optional[ConflictAnalysis] = None
+    recap_id: Optional[int] = None
     
     def to_dict(self) -> dict:
         """Convert entry to dictionary for serialization."""
@@ -70,7 +101,8 @@ class Entry:
             "raw_text": self.raw_text,
             "narrative_text": self.narrative_text,
             "title": self.title,
-            "conflict_data": self.conflict_data.to_dict() if self.conflict_data else None
+            "conflict_data": self.conflict_data.to_dict() if self.conflict_data else None,
+            "recap_id": self.recap_id
         }
     
     @classmethod
@@ -82,7 +114,8 @@ class Entry:
             raw_text=data.get("raw_text", ""),
             narrative_text=data.get("narrative_text"),
             title=data.get("title"),
-            conflict_data=ConflictAnalysis.from_dict(data.get("conflict_data")) if data.get("conflict_data") else None
+            conflict_data=ConflictAnalysis.from_dict(data.get("conflict_data")) if data.get("conflict_data") else None,
+            recap_id=data.get("recap_id")
         )
     
     def snippet(self, max_length: int = 100) -> str:
