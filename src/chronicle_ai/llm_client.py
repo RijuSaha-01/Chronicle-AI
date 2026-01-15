@@ -180,6 +180,48 @@ Episode title:"""
         return title
     
     return "Untitled Episode"
+    
+    
+def generate_synopsis(text: str) -> Dict[str, any]:
+    """
+    Generate a logline, synopsis, and keywords for an episode.
+    """
+    if not text or not text.strip():
+        return {"logline": "", "synopsis": "", "keywords": []}
+        
+    prompt = f"""You are an expert TV writer and metadata specialist.
+Analyze the following episode narrative and extract the following:
+1. LOGLINE: Exactly one sentence hook (max 15 words) with intrigue, no spoilers. 
+   Example: 'A critical deadline forces an unexpected alliance with an old rival.'
+2. SYNOPSIS: A 2-3 sentence summary for an episode listing.
+3. KEYWORDS: Exactly 5 searchable/filterable tags that capture themes or events.
+
+Output the result as a raw JSON object with 'logline', 'synopsis', and 'keywords' (list) keys.
+Do not include any other text, only the JSON.
+
+Episode Narrative:
+{text[:1500]}
+
+JSON Output:"""
+
+    result = _make_request(prompt, timeout=40)
+    
+    if result:
+        try:
+            import json
+            import re
+            json_match = re.search(r'{{.*}}', result, re.DOTALL)
+            if json_match:
+                data = json.loads(json_match.group(0))
+                return {
+                    "logline": str(data.get("logline", "")).strip(),
+                    "synopsis": str(data.get("synopsis", "")).strip(),
+                    "keywords": [str(k).strip() for k in data.get("keywords", [])[:5]]
+                }
+        except Exception as e:
+            logging.error(f"Failed to parse synopsis JSON: {e}")
+
+    return {"logline": "", "synopsis": "", "keywords": []}
 
 
 def ensure_narrative(entry) -> None:
@@ -221,12 +263,24 @@ def ensure_title(entry) -> None:
             entry.title = best_opt['title']
 
 
+def ensure_synopsis(entry) -> None:
+    """
+    Ensure an entry has synopsis data.
+    """
+    if not entry.logline or not entry.synopsis or not entry.keywords:
+        text = entry.narrative_text or entry.raw_text
+        data = generate_synopsis(text)
+        entry.logline = data.get("logline")
+        entry.synopsis = data.get("synopsis")
+        entry.keywords = data.get("keywords", [])
+
+
 def process_entry(entry) -> None:
     """
-    Fully process an entry: generate both narrative and title.
+    Fully process an entry: generate narrative, title, and synopsis.
     
-    Convenience function that ensures both narrative_text and title
-    are populated. Modifies the entry object in place.
+    Convenience function that ensures all AI-generated fields are populated.
+    Modifies the entry object in place.
     
     Args:
         entry: Entry object to process (modified in place)
@@ -234,3 +288,4 @@ def process_entry(entry) -> None:
     ensure_conflict_analysis(entry)
     ensure_narrative(entry)
     ensure_title(entry)
+    ensure_synopsis(entry)

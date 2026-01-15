@@ -92,6 +92,9 @@ class Entry:
     title: Optional[str] = None
     title_options: List[dict] = field(default_factory=list)  # List of {"title": str, "score": float, "pattern": str}
     conflict_data: Optional[ConflictAnalysis] = None
+    logline: Optional[str] = None
+    synopsis: Optional[str] = None
+    keywords: List[str] = field(default_factory=list)
     recap_id: Optional[int] = None
     
     def to_dict(self) -> dict:
@@ -103,6 +106,9 @@ class Entry:
             "narrative_text": self.narrative_text,
             "title": self.title,
             "title_options": self.title_options,
+            "logline": self.logline,
+            "synopsis": self.synopsis,
+            "keywords": self.keywords,
             "conflict_data": self.conflict_data.to_dict() if self.conflict_data else None,
             "recap_id": self.recap_id
         }
@@ -117,6 +123,9 @@ class Entry:
             narrative_text=data.get("narrative_text"),
             title=data.get("title"),
             title_options=data.get("title_options", []),
+            logline=data.get("logline"),
+            synopsis=data.get("synopsis"),
+            keywords=data.get("keywords", []),
             conflict_data=ConflictAnalysis.from_dict(data.get("conflict_data")) if data.get("conflict_data") else None,
             recap_id=data.get("recap_id")
         )

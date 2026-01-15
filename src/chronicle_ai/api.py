@@ -50,6 +50,9 @@ class EntryResponse(BaseModel):
     raw_text: str
     narrative_text: Optional[str] = None
     title: Optional[str] = None
+    logline: Optional[str] = None
+    synopsis: Optional[str] = None
+    keywords: List[str] = []
     conflict_data: Optional[dict] = None
     
     class Config:
@@ -164,7 +167,10 @@ async def create_entry(body: EntryCreate):
         date=entry.date,
         raw_text=entry.raw_text,
         narrative_text=entry.narrative_text,
-        title=entry.title
+        title=entry.title,
+        logline=entry.logline,
+        synopsis=entry.synopsis,
+        keywords=entry.keywords
     )
 
 
@@ -211,7 +217,10 @@ async def create_guided_entry(body: GuidedEntryCreate):
         date=entry.date,
         raw_text=entry.raw_text,
         narrative_text=entry.narrative_text,
-        title=entry.title
+        title=entry.title,
+        logline=entry.logline,
+        synopsis=entry.synopsis,
+        keywords=entry.keywords
     )
 
 
@@ -242,6 +251,9 @@ async def list_entries(
                 raw_text=e.raw_text,
                 narrative_text=e.narrative_text,
                 title=e.title,
+                logline=e.logline,
+                synopsis=e.synopsis,
+                keywords=e.keywords,
                 conflict_data=e.conflict_data.to_dict() if e.conflict_data else None
             )
             for e in entries
@@ -266,7 +278,10 @@ async def get_entry(entry_id: int):
         date=entry.date,
         raw_text=entry.raw_text,
         narrative_text=entry.narrative_text,
-        title=entry.title
+        title=entry.title,
+        logline=entry.logline,
+        synopsis=entry.synopsis,
+        keywords=entry.keywords
     )
 
 
@@ -298,7 +313,10 @@ async def regenerate_entry(entry_id: int):
         date=entry.date,
         raw_text=entry.raw_text,
         narrative_text=entry.narrative_text,
-        title=entry.title
+        title=entry.title,
+        logline=entry.logline,
+        synopsis=entry.synopsis,
+        keywords=entry.keywords
     )
 
 

@@ -163,6 +163,8 @@ def cmd_list(args):
         
         print(f"\n📅 [{entry.date}] ID: {entry.id}")
         print(f"   🎬 {title}")
+        if entry.logline:
+            print(f"   💡 {entry.logline}")
         print(f"   📝 {snippet}")
     
     print("\n" + "=" * 60)
@@ -196,6 +198,14 @@ def cmd_view(args):
         print("📖 Narrative:")
         print("-" * 40)
         print(entry.narrative_text)
+        print()
+    
+    if entry.logline:
+        print(f"💡 Logline: {entry.logline}")
+    if entry.keywords:
+        print(f"🏷️ Keywords: {', '.join(entry.keywords)}")
+    if entry.synopsis:
+        print(f"\n📝 Synopsis:\n{entry.synopsis}")
         print()
     
     if entry.conflict_data:
@@ -348,6 +358,39 @@ def cmd_retitle(args):
             pattern = opt.get('pattern', 'N/A')
             score = opt.get('score', 0)
             print(f"- {opt['title']} [{pattern}] (Score: {score:.2f})")
+            
+            
+def cmd_batch_synopsis(args):
+    """Handle 'batch-synopsis' command - generate missing synopsis for all episodes."""
+    repo = get_repository()
+    entries = repo.list_entries()
+    
+    to_process = [e for e in entries if not e.logline or not e.synopsis]
+    
+    if not to_process:
+        print("✅ All episodes already have synopsis metadata.")
+        return
+        
+    print(f"🤖 Found {len(to_process)} episodes missing synopsis metadata.")
+    print(f"🔄 Starting batch generation (this may take a while)...")
+    
+    if not is_ollama_available():
+        print("❌ Ollama not available.")
+        return
+
+    from .llm_client import ensure_synopsis
+    
+    success_count = 0
+    for i, entry in enumerate(to_process, 1):
+        print(f"[{i}/{len(to_process)}] Processing Episode {entry.id}: {entry.display_title()}...")
+        try:
+            ensure_synopsis(entry)
+            repo.update_entry(entry)
+            success_count += 1
+        except Exception as e:
+            print(f"  ❌ Failed: {e}")
+            
+    print(f"\n✅ Batch processing complete! {success_count}/{len(to_process)} episodes updated.")
 
 
 def cmd_status(args):
@@ -432,6 +475,9 @@ Examples:
     retitle_parser.add_argument("--episode", type=int, required=True, help="Episode ID to retitle")
     retitle_parser.add_argument("--pick", action="store_true", help="Interactively pick from options")
     
+    # Batch synopsis command
+    batch_parser = subparsers.add_parser("batch-synopsis", help="Generate missing synopsis for all existing episodes")
+    
     # Status command
     subparsers.add_parser("status", help="Show system status")
     
@@ -458,6 +504,7 @@ def main():
         "status": cmd_status,
         "recap": cmd_recap,
         "retitle": cmd_retitle,
+        "batch-synopsis": cmd_batch_synopsis,
     }
     
     handler = commands.get(args.command)
