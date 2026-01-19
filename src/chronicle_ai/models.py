@@ -11,6 +11,48 @@ import json
 
 
 @dataclass
+class Season:
+    """
+    Organizes episodes into distinct narrative arcs or time periods.
+    """
+    id: Optional[int] = None
+    title: str = ""
+    start_date: str = ""
+    end_date: str = ""
+    episode_count: int = 0
+    dominant_themes: List[str] = field(default_factory=list)
+    description: str = ""
+    mode: str = "default"  # default, smart, manual
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "title": self.title,
+            "start_date": self.start_date,
+            "end_date": self.end_date,
+            "episode_count": self.episode_count,
+            "dominant_themes": self.dominant_themes,
+            "description": self.description,
+            "mode": self.mode
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Season":
+        if not data:
+            return cls()
+        return cls(
+            id=data.get("id"),
+            title=data.get("title", ""),
+            start_date=data.get("start_date", ""),
+            end_date=data.get("end_date", ""),
+            episode_count=data.get("episode_count", 0),
+            dominant_themes=data.get("dominant_themes", []),
+            description=data.get("description", ""),
+            mode=data.get("mode", "default")
+        )
+
+
+@dataclass
 class ConflictAnalysis:
     """
     Metadata about conflicts found in a diary entry.
@@ -96,6 +138,7 @@ class Entry:
     synopsis: Optional[str] = None
     keywords: List[str] = field(default_factory=list)
     recap_id: Optional[int] = None
+    season_id: Optional[int] = None
     
     def to_dict(self) -> dict:
         """Convert entry to dictionary for serialization."""
@@ -110,7 +153,8 @@ class Entry:
             "synopsis": self.synopsis,
             "keywords": self.keywords,
             "conflict_data": self.conflict_data.to_dict() if self.conflict_data else None,
-            "recap_id": self.recap_id
+            "recap_id": self.recap_id,
+            "season_id": self.season_id
         }
     
     @classmethod
@@ -127,7 +171,8 @@ class Entry:
             synopsis=data.get("synopsis"),
             keywords=data.get("keywords", []),
             conflict_data=ConflictAnalysis.from_dict(data.get("conflict_data")) if data.get("conflict_data") else None,
-            recap_id=data.get("recap_id")
+            recap_id=data.get("recap_id"),
+            season_id=data.get("season_id")
         )
     
     def snippet(self, max_length: int = 100) -> str:

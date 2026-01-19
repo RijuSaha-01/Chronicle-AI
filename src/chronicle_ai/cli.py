@@ -13,6 +13,7 @@ from .repository import get_repository
 from .llm_client import process_entry, is_ollama_available
 from .recap import RecapGenerator
 from .exports import export_entry_to_markdown, export_weekly, export_daily
+from .season_manager import SeasonManager
 
 
 # Guided mode questions
@@ -393,6 +394,56 @@ def cmd_batch_synopsis(args):
     print(f"\n✅ Batch processing complete! {success_count}/{len(to_process)} episodes updated.")
 
 
+def cmd_seasons(args):
+    """Handle the 'seasons' command - list and create seasons."""
+    repo = get_repository()
+    manager = SeasonManager(repo)
+    
+    if args.create:
+        if args.mode == "manual":
+            if not args.start or not args.end or not args.title:
+                print("❌ Manual mode requires --start, --end, and --title.")
+                return
+            print(f"🎬 Creating manual season: {args.title}...")
+            manager.create_manual_season(args.title, args.start, args.end)
+            print("✅ Season created and episodes linked!")
+        else:
+            mode = args.mode or "default"
+            print(f"🎬 Organizing episodes into seasons (Mode: {mode})...")
+            print("🤖 This will analyze narratives and themes to create life chapters.")
+            
+            manager.organize_seasons(mode=mode, clear_existing=True)
+            print("✅ Seasons created and episodes linked successfully!")
+        
+        # Now list them
+        seasons = repo.list_seasons()
+    elif args.list:
+        seasons = repo.list_seasons()
+    else:
+        # Fallback to list if nothing specified
+        seasons = repo.list_seasons()
+
+    if not seasons:
+        if args.list:
+            print("📭 No seasons found. Run 'chronicle seasons --create' to organize episodes.")
+        return
+
+    print(f"\n🎬 Chronicle AI - Life Seasons ({len(seasons)})")
+    print("=" * 80)
+    
+    # Reverse seasons to show chronological order (or descending as per repo.list_seasons which is DESC)
+    # Actually repo.list_seasons() returns DESC by start_date.
+    for s in seasons:
+        print(f"\n🏆 {s.title}")
+        print(f"   📅 {s.start_date} to {s.end_date} ({s.episode_count} episodes)")
+        if s.description:
+            print(f"   📝 {s.description}")
+        if s.dominant_themes:
+            print(f"   🏷️  Themes: {', '.join(s.dominant_themes)}")
+    
+    print("\n" + "=" * 80)
+
+
 def cmd_status(args):
     """Handle the 'status' command - show system status."""
     repo = get_repository()
@@ -478,6 +529,16 @@ Examples:
     # Batch synopsis command
     batch_parser = subparsers.add_parser("batch-synopsis", help="Generate missing synopsis for all existing episodes")
     
+    # Seasons command
+    seasons_parser = subparsers.add_parser("seasons", help="Manage life seasons")
+    seasons_parser.add_argument("--list", action="store_true", help="List all seasons")
+    seasons_parser.add_argument("--create", action="store_true", help="Organize all episodes into seasons")
+    seasons_parser.add_argument("--mode", type=str, choices=["default", "smart", "manual"], default="default", 
+                               help="Season organization mode (default: monthly, smart: chapter detection, manual: set boundaries)")
+    seasons_parser.add_argument("--start", type=str, help="Start date for manual season (YYYY-MM-DD)")
+    seasons_parser.add_argument("--end", type=str, help="End date for manual season (YYYY-MM-DD)")
+    seasons_parser.add_argument("--title", type=str, help="Title for manual season")
+    
     # Status command
     subparsers.add_parser("status", help="Show system status")
     
@@ -505,6 +566,7 @@ def main():
         "recap": cmd_recap,
         "retitle": cmd_retitle,
         "batch-synopsis": cmd_batch_synopsis,
+        "seasons": cmd_seasons,
     }
     
     handler = commands.get(args.command)

@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import List, Optional
 from datetime import date, timedelta
 
-from .models import Entry, ConflictAnalysis, Recap
+from .models import Entry, ConflictAnalysis, Recap, Season
 
 
 # Default database location (can be overridden via environment variable)
@@ -62,6 +62,8 @@ class EntryRepository:
                 cursor.execute("ALTER TABLE diary_entries ADD COLUMN conflict_data TEXT")
             if 'recap_id' not in columns:
                 cursor.execute("ALTER TABLE diary_entries ADD COLUMN recap_id INTEGER")
+            if 'season_id' not in columns:
+                cursor.execute("ALTER TABLE diary_entries ADD COLUMN season_id INTEGER")
             if 'title_options' not in columns:
                 cursor.execute("ALTER TABLE diary_entries ADD COLUMN title_options TEXT")
             if 'logline' not in columns:
@@ -82,6 +84,22 @@ class EntryRepository:
                         entry_ids TEXT NOT NULL
                     )
                 """)
+
+            # Create seasons table if it doesn't exist
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='seasons'")
+            if cursor.fetchone() is None:
+                cursor.execute("""
+                    CREATE TABLE seasons (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        title TEXT NOT NULL,
+                        start_date TEXT NOT NULL,
+                        end_date TEXT NOT NULL,
+                        episode_count INTEGER DEFAULT 0,
+                        dominant_themes TEXT,
+                        description TEXT,
+                        mode TEXT DEFAULT 'default'
+                    )
+                """)
         else:
             # Create table with all columns
             cursor.execute("""
@@ -96,7 +114,8 @@ class EntryRepository:
                     synopsis TEXT,
                     keywords TEXT,
                     conflict_data TEXT,
-                    recap_id INTEGER
+                    recap_id INTEGER,
+                    season_id INTEGER
                 )
             """)
             cursor.execute("""
@@ -105,6 +124,18 @@ class EntryRepository:
                     date TEXT NOT NULL,
                     content TEXT NOT NULL,
                     entry_ids TEXT NOT NULL
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE seasons (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    title TEXT NOT NULL,
+                    start_date TEXT NOT NULL,
+                    end_date TEXT NOT NULL,
+                    episode_count INTEGER DEFAULT 0,
+                    dominant_themes TEXT,
+                    description TEXT,
+                    mode TEXT DEFAULT 'default'
                 )
             """)
         
@@ -125,8 +156,8 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            """INSERT INTO diary_entries (date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id) 
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO diary_entries (date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id) 
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 entry.date, 
                 entry.raw_text, 
@@ -137,7 +168,8 @@ class EntryRepository:
                 entry.synopsis,
                 json.dumps(entry.keywords) if entry.keywords else None,
                 json.dumps(entry.conflict_data.to_dict()) if entry.conflict_data else None,
-                entry.recap_id
+                entry.recap_id,
+                entry.season_id
             )
         )
         
@@ -165,7 +197,7 @@ class EntryRepository:
         
         cursor.execute(
             """UPDATE diary_entries 
-               SET date = ?, raw_text = ?, narrative_text = ?, title = ?, title_options = ?, logline = ?, synopsis = ?, keywords = ?, conflict_data = ?, recap_id = ?
+               SET date = ?, raw_text = ?, narrative_text = ?, title = ?, title_options = ?, logline = ?, synopsis = ?, keywords = ?, conflict_data = ?, recap_id = ?, season_id = ?
                WHERE id = ?""",
             (
                 entry.date, 
@@ -178,6 +210,7 @@ class EntryRepository:
                 json.dumps(entry.keywords) if entry.keywords else None,
                 json.dumps(entry.conflict_data.to_dict()) if entry.conflict_data else None,
                 entry.recap_id,
+                entry.season_id,
                 entry.id
             )
         )
@@ -201,7 +234,7 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            "SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id FROM diary_entries WHERE id = ?",
+            "SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id FROM diary_entries WHERE id = ?",
             (entry_id,)
         )
         row = cursor.fetchone()
@@ -231,7 +264,7 @@ class EntryRepository:
         conn = self._get_connection()
         cursor = conn.cursor()
         
-        query = "SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id FROM diary_entries ORDER BY date DESC, id DESC"
+        query = "SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id FROM diary_entries ORDER BY date DESC, id DESC"
         if limit:
             query += f" LIMIT {int(limit)}"
         
@@ -279,7 +312,7 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            """SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id 
+            """SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id 
                FROM diary_entries 
                WHERE date >= ? AND date <= ?
                ORDER BY date DESC, id DESC""",
@@ -417,6 +450,127 @@ class EntryRepository:
             recaps.append(Recap.from_dict(data))
             
         return recaps
+
+    # --- Season Methods ---
+
+    def create_season(self, season: Season) -> Season:
+        """Create a new season in the database."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute(
+            """INSERT INTO seasons (title, start_date, end_date, episode_count, dominant_themes, description, mode) 
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (
+                season.title,
+                season.start_date,
+                season.end_date,
+                season.episode_count,
+                json.dumps(season.dominant_themes),
+                season.description,
+                season.mode
+            )
+        )
+        
+        season.id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        
+        return season
+
+    def update_season(self, season: Season) -> Season:
+        """Update an existing season."""
+        if season.id is None:
+            raise ValueError("Cannot update season without id")
+            
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute(
+            """UPDATE seasons 
+               SET title = ?, start_date = ?, end_date = ?, episode_count = ?, dominant_themes = ?, description = ?, mode = ?
+               WHERE id = ?""",
+            (
+                season.title,
+                season.start_date,
+                season.end_date,
+                season.episode_count,
+                json.dumps(season.dominant_themes),
+                season.description,
+                season.mode,
+                season.id
+            )
+        )
+        
+        conn.commit()
+        conn.close()
+        return season
+
+    def get_season_by_id(self, season_id: int) -> Optional[Season]:
+        """Retrieve a season by its ID."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute(
+            "SELECT id, title, start_date, end_date, episode_count, dominant_themes, description, mode FROM seasons WHERE id = ?",
+            (season_id,)
+        )
+        row = cursor.fetchone()
+        conn.close()
+        
+        if row:
+            data = dict(row)
+            data["dominant_themes"] = json.loads(data["dominant_themes"]) if data.get("dominant_themes") else []
+            return Season.from_dict(data)
+        return None
+
+    def list_seasons(self) -> List[Season]:
+        """List all seasons ordered by start date."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute(
+            "SELECT id, title, start_date, end_date, episode_count, dominant_themes, description, mode FROM seasons ORDER BY start_date DESC"
+        )
+        rows = cursor.fetchall()
+        conn.close()
+        
+        seasons = []
+        for row in rows:
+            data = dict(row)
+            data["dominant_themes"] = json.loads(data["dominant_themes"]) if data.get("dominant_themes") else []
+            seasons.append(Season.from_dict(data))
+            
+        return seasons
+
+    def get_season_by_date(self, target_date: str) -> Optional[Season]:
+        """Find a season that covers the given date."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute(
+            "SELECT id, title, start_date, end_date, episode_count, dominant_themes, description, mode FROM seasons WHERE start_date <= ? AND end_date >= ?",
+            (target_date, target_date)
+        )
+        row = cursor.fetchone()
+        conn.close()
+        
+        if row:
+            data = dict(row)
+            data["dominant_themes"] = json.loads(data["dominant_themes"]) if data.get("dominant_themes") else []
+            return Season.from_dict(data)
+        return None
+    
+    def clear_seasons(self):
+        """Delete all seasons and reset season_id in entries."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("DELETE FROM seasons")
+        cursor.execute("UPDATE diary_entries SET season_id = NULL")
+        
+        conn.commit()
+        conn.close()
 
 
 # Global repository instance for convenience
