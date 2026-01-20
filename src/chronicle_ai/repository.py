@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import List, Optional
 from datetime import date, timedelta
 
-from .models import Entry, ConflictAnalysis, Recap, Season
+from .models import Entry, ConflictAnalysis, Recap, Season, SeasonArc
 
 
 # Default database location (can be overridden via environment variable)
@@ -97,9 +97,16 @@ class EntryRepository:
                         episode_count INTEGER DEFAULT 0,
                         dominant_themes TEXT,
                         description TEXT,
-                        mode TEXT DEFAULT 'default'
+                        mode TEXT DEFAULT 'default',
+                        arc_analysis TEXT
                     )
                 """)
+            else:
+                # Check for missing columns in existing seasons table
+                cursor.execute("PRAGMA table_info(seasons)")
+                season_columns = {row['name'] for row in cursor.fetchall()}
+                if 'arc_analysis' not in season_columns:
+                    cursor.execute("ALTER TABLE seasons ADD COLUMN arc_analysis TEXT")
         else:
             # Create table with all columns
             cursor.execute("""
@@ -135,7 +142,8 @@ class EntryRepository:
                     episode_count INTEGER DEFAULT 0,
                     dominant_themes TEXT,
                     description TEXT,
-                    mode TEXT DEFAULT 'default'
+                    mode TEXT DEFAULT 'default',
+                    arc_analysis TEXT
                 )
             """)
         
@@ -459,8 +467,8 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            """INSERT INTO seasons (title, start_date, end_date, episode_count, dominant_themes, description, mode) 
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO seasons (title, start_date, end_date, episode_count, dominant_themes, description, mode, arc_analysis) 
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 season.title,
                 season.start_date,
@@ -468,7 +476,8 @@ class EntryRepository:
                 season.episode_count,
                 json.dumps(season.dominant_themes),
                 season.description,
-                season.mode
+                season.mode,
+                json.dumps(season.arc_analysis.to_dict()) if season.arc_analysis else None
             )
         )
         
@@ -488,7 +497,7 @@ class EntryRepository:
         
         cursor.execute(
             """UPDATE seasons 
-               SET title = ?, start_date = ?, end_date = ?, episode_count = ?, dominant_themes = ?, description = ?, mode = ?
+               SET title = ?, start_date = ?, end_date = ?, episode_count = ?, dominant_themes = ?, description = ?, mode = ?, arc_analysis = ?
                WHERE id = ?""",
             (
                 season.title,
@@ -498,6 +507,7 @@ class EntryRepository:
                 json.dumps(season.dominant_themes),
                 season.description,
                 season.mode,
+                json.dumps(season.arc_analysis.to_dict()) if season.arc_analysis else None,
                 season.id
             )
         )
@@ -512,7 +522,7 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            "SELECT id, title, start_date, end_date, episode_count, dominant_themes, description, mode FROM seasons WHERE id = ?",
+            "SELECT id, title, start_date, end_date, episode_count, dominant_themes, description, mode, arc_analysis FROM seasons WHERE id = ?",
             (season_id,)
         )
         row = cursor.fetchone()
@@ -521,6 +531,8 @@ class EntryRepository:
         if row:
             data = dict(row)
             data["dominant_themes"] = json.loads(data["dominant_themes"]) if data.get("dominant_themes") else []
+            if data.get("arc_analysis"):
+                data["arc_analysis"] = json.loads(data["arc_analysis"])
             return Season.from_dict(data)
         return None
 
@@ -530,7 +542,7 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            "SELECT id, title, start_date, end_date, episode_count, dominant_themes, description, mode FROM seasons ORDER BY start_date DESC"
+            "SELECT id, title, start_date, end_date, episode_count, dominant_themes, description, mode, arc_analysis FROM seasons ORDER BY start_date DESC"
         )
         rows = cursor.fetchall()
         conn.close()
@@ -539,6 +551,8 @@ class EntryRepository:
         for row in rows:
             data = dict(row)
             data["dominant_themes"] = json.loads(data["dominant_themes"]) if data.get("dominant_themes") else []
+            if data.get("arc_analysis"):
+                data["arc_analysis"] = json.loads(data["arc_analysis"])
             seasons.append(Season.from_dict(data))
             
         return seasons
@@ -549,7 +563,7 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            "SELECT id, title, start_date, end_date, episode_count, dominant_themes, description, mode FROM seasons WHERE start_date <= ? AND end_date >= ?",
+            "SELECT id, title, start_date, end_date, episode_count, dominant_themes, description, mode, arc_analysis FROM seasons WHERE start_date <= ? AND end_date >= ?",
             (target_date, target_date)
         )
         row = cursor.fetchone()
@@ -558,6 +572,8 @@ class EntryRepository:
         if row:
             data = dict(row)
             data["dominant_themes"] = json.loads(data["dominant_themes"]) if data.get("dominant_themes") else []
+            if data.get("arc_analysis"):
+                data["arc_analysis"] = json.loads(data["arc_analysis"])
             return Season.from_dict(data)
         return None
     

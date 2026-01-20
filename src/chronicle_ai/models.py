@@ -11,6 +11,42 @@ import json
 
 
 @dataclass
+class SeasonArc:
+    """
+    Detailed narrative analysis of a season's arc.
+    """
+    storylines: dict = field(default_factory=dict)  # career, health, relationships, etc.
+    character_growth: str = ""
+    climax_episode_id: Optional[int] = None
+    motifs: List[str] = field(default_factory=list)
+    summary: str = ""
+    finale_worthy_episodes: List[int] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        return {
+            "storylines": self.storylines,
+            "character_growth": self.character_growth,
+            "climax_episode_id": self.climax_episode_id,
+            "motifs": self.motifs,
+            "summary": self.summary,
+            "finale_worthy_episodes": self.finale_worthy_episodes
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "SeasonArc":
+        if not data:
+            return cls()
+        return cls(
+            storylines=data.get("storylines", {}),
+            character_growth=data.get("character_growth", ""),
+            climax_episode_id=data.get("climax_episode_id"),
+            motifs=data.get("motifs", []),
+            summary=data.get("summary", ""),
+            finale_worthy_episodes=data.get("finale_worthy_episodes", [])
+        )
+
+
+@dataclass
 class Season:
     """
     Organizes episodes into distinct narrative arcs or time periods.
@@ -23,6 +59,7 @@ class Season:
     dominant_themes: List[str] = field(default_factory=list)
     description: str = ""
     mode: str = "default"  # default, smart, manual
+    arc_analysis: Optional[SeasonArc] = None
 
     def to_dict(self) -> dict:
         return {
@@ -33,7 +70,8 @@ class Season:
             "episode_count": self.episode_count,
             "dominant_themes": self.dominant_themes,
             "description": self.description,
-            "mode": self.mode
+            "mode": self.mode,
+            "arc_analysis": self.arc_analysis.to_dict() if self.arc_analysis else None
         }
 
     @classmethod
@@ -48,7 +86,8 @@ class Season:
             episode_count=data.get("episode_count", 0),
             dominant_themes=data.get("dominant_themes", []),
             description=data.get("description", ""),
-            mode=data.get("mode", "default")
+            mode=data.get("mode", "default"),
+            arc_analysis=SeasonArc.from_dict(data.get("arc_analysis")) if data.get("arc_analysis") else None
         )
 
 

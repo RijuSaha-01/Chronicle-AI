@@ -417,6 +417,45 @@ def cmd_seasons(args):
         
         # Now list them
         seasons = repo.list_seasons()
+    elif args.analyze:
+        from .arc_analyzer import SeasonArcAnalyzer
+        print(f"🧠 Analyzing season {args.analyze}...")
+        print("🤖 Identifying storylines, character growth, and themes...")
+        
+        analyzer = SeasonArcAnalyzer(repo)
+        try:
+            arc = analyzer.analyze_season(args.analyze)
+            
+            print("\n" + "=" * 80)
+            print(f"🎬 SEASON SUMMARY: {arc.summary}")
+            print("=" * 80)
+            
+            print(f"\n📈 STORYLINES:")
+            for s_type, s_desc in arc.storylines.items():
+                print(f"   🏆 {s_type.title()}: {s_desc}")
+            
+            print(f"\n🌱 CHARACTER GROWTH:")
+            print(f"   {arc.character_growth}")
+            
+            if arc.climax_episode_id:
+                climax = repo.get_entry_by_id(arc.climax_episode_id)
+                climax_title = climax.display_title() if climax else "Unknown"
+                print(f"\n🔥 SEASON CLIMAX: Episode {arc.climax_episode_id} ({climax_title})")
+            
+            print(f"\n🏷️  MOTIFS & THEMES:")
+            print(f"   {', '.join(arc.motifs)}")
+            
+            if arc.finale_worthy_episodes:
+                print(f"\n🎬 FINALE-WORTHY EPISODES:")
+                for ep_id in arc.finale_worthy_episodes:
+                    ep = repo.get_entry_by_id(ep_id)
+                    ep_title = ep.display_title() if ep else f"Episode {ep_id}"
+                    print(f"   📺 ID {ep_id}: {ep_title}")
+            
+            print("\n" + "=" * 80)
+        except Exception as e:
+            print(f"❌ Analysis failed: {e}")
+        return
     elif args.list:
         seasons = repo.list_seasons()
     else:
@@ -538,6 +577,7 @@ Examples:
     seasons_parser.add_argument("--start", type=str, help="Start date for manual season (YYYY-MM-DD)")
     seasons_parser.add_argument("--end", type=str, help="End date for manual season (YYYY-MM-DD)")
     seasons_parser.add_argument("--title", type=str, help="Title for manual season")
+    seasons_parser.add_argument("--analyze", type=int, help="Perform narrative arc analysis on a season by ID")
     
     # Status command
     subparsers.add_parser("status", help="Show system status")
