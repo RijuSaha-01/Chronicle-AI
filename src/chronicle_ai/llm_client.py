@@ -20,6 +20,23 @@ conflict_detector = ConflictDetector()
 # Redundant functions removed as they are now in llm_utils
 
 
+def detect_mood(raw_text: str) -> str:
+    """Detect mood from raw diary text."""
+    lower_text = raw_text.lower()
+    if any(w in lower_text for w in ["productive", "finished", "accomplished", "work", "busy"]):
+        return "productive"
+    elif any(w in lower_text for w in ["sad", "reflective", "thought", "lonely", "missing"]):
+        return "reflective"
+    elif any(w in lower_text for w in ["stress", "deadline", "fast", "rushed", "panic"]):
+        return "stressful"
+    elif any(w in lower_text for w in ["relax", "chill", "calm", "peace", "quiet"]):
+        return "relaxed"
+    elif any(w in lower_text for w in ["mystery", "weird", "strange", "dark", "unknown"]):
+        return "mysterious"
+    else:
+        return "neutral"
+
+
 def generate_narrative(raw_text: str, mood: Optional[str] = None, conflict_data: Optional[ConflictAnalysis] = None) -> str:
     """
     Generate a narrative paragraph from raw diary text with cinematic enhancement.
@@ -40,19 +57,7 @@ def generate_narrative(raw_text: str, mood: Optional[str] = None, conflict_data:
     
     # 1. Detect mood if not explicitly provided
     if not mood:
-        lower_text = raw_text.lower()
-        if any(w in lower_text for w in ["productive", "finished", "accomplished", "work", "busy"]):
-            mood = "productive"
-        elif any(w in lower_text for w in ["sad", "reflective", "thought", "lonely", "missing"]):
-            mood = "reflective"
-        elif any(w in lower_text for w in ["stress", "deadline", "fast", "rushed", "panic"]):
-            mood = "stressful"
-        elif any(w in lower_text for w in ["relax", "chill", "calm", "peace", "quiet"]):
-            mood = "relaxed"
-        elif any(w in lower_text for w in ["mystery", "weird", "strange", "dark", "unknown"]):
-            mood = "mysterious"
-        else:
-            mood = "neutral"
+        mood = detect_mood(raw_text)
     
     # 1.5 Incorporate conflict data into the prompt
     conflict_context = ""
@@ -275,17 +280,104 @@ def ensure_synopsis(entry) -> None:
         entry.keywords = data.get("keywords", [])
 
 
-def process_entry(entry) -> None:
+def process_entry(entry, force: bool = False) -> None:
     """
     Fully process an entry: generate narrative, title, and synopsis.
     
-    Convenience function that ensures all AI-generated fields are populated.
-    Modifies the entry object in place.
+    This function uses an optimized single-request approach if all components are missing,
+    reusing LLM context by combining instructions.
     
     Args:
         entry: Entry object to process (modified in place)
+        force: If True, regenerates even if data exists
     """
+    # If all or most are missing, use the optimized full generation
+    # Otherwise, use sequential 'ensure' calls to fill gaps.
+    is_missing_all = (force or 
+                     (not entry.narrative_text and not entry.conflict_data and 
+                      not entry.title and not entry.synopsis))
+    
+    if is_missing_all:
+        try:
+            _process_entry_full(entry)
+            return
+        except Exception as e:
+            logging.warning(f"Optimized processing failed for entry {entry.id}: {e}. Falling back to sequential.")
+
+    # Sequential fallback / Partial update
     ensure_conflict_analysis(entry)
     ensure_narrative(entry)
     ensure_title(entry)
     ensure_synopsis(entry)
+
+
+def _process_entry_full(entry) -> None:
+    """Internal optimized processing using a single large prompt."""
+    import json
+    import re
+    
+    mood = detect_mood(entry.raw_text)
+    
+    prompt = f"""You are an expert TV writer and metadata specialist.
+Analyze the following diary entry and produce a complete episode package.
+
+1. CONFLICTS: Identify internal and external conflicts, assign a tension level (1-10), and determine the primary conflict archetype (person vs self, vs environment, vs system, vs time).
+2. NARRATIVES: Write a 2-4 sentence cinematic narrative in third person, present tense. Use identified conflicts to drive the structure.
+3. TITLES: Generate 5 title options with these patterns: 'The One Where...', Single evocative word, Reference, Metaphorical, Direct dramatic. Include relevance scores (0.0-1.0).
+4. METADATA: Provide a 1-sentence logline, a 2-3 sentence synopsis, and exactly 5 keywords.
+
+Diary entry:
+{entry.raw_text}
+
+IMPORTANT: Output ONLY a raw JSON object with these keys: 
+'conflict' (object with internal_conflicts, external_conflicts, tension_level, archetype, central_conflict),
+'narrative' (string),
+'titles' (list of objects with title, pattern, score),
+'metadata' (object with logline, synopsis, keywords).
+"""
+
+    # Apply cinematic style guide to the prompt
+    enhanced_prompt = style_guide.enhance_prompt(prompt, mood)
+    
+    result = _make_request(enhanced_prompt, timeout=90)
+    
+    if result:
+        try:
+            # Extract and parse JSON
+            json_match = re.search(r'\{.*\}', result, re.DOTALL)
+            if json_match:
+                data = json.loads(json_match.group(0))
+                
+                # 1. Conflict
+                c_data = data.get('conflict', {})
+                entry.conflict_data = ConflictAnalysis(
+                    internal_conflicts=c_data.get('internal_conflicts', []),
+                    external_conflicts=c_data.get('external_conflicts', []),
+                    tension_level=c_data.get('tension_level', 1),
+                    archetype=c_data.get('archetype', 'none'),
+                    central_conflict=c_data.get('central_conflict', '')
+                )
+                
+                # 2. Narrative
+                narrative = data.get('narrative', '')
+                if narrative:
+                    entry.narrative_text = style_guide.add_sensory_layer(narrative)
+                
+                # 3. Titles
+                titles = data.get('titles', [])
+                if titles:
+                    entry.title_options = titles
+                    best_opt = max(titles, key=lambda x: x.get('score', 0))
+                    entry.title = best_opt.get('title')
+                
+                # 4. Metadata
+                meta = data.get('metadata', {})
+                entry.logline = meta.get('logline', '')
+                entry.synopsis = meta.get('synopsis', '')
+                entry.keywords = meta.get('keywords', [])
+                
+                return
+        except Exception as e:
+            raise Exception(f"Failed to parse integrated JSON: {e}")
+
+    raise Exception("Ollama returned empty or invalid response for integrated processing.")

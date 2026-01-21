@@ -151,6 +151,9 @@ python scripts/diary_cli.py regenerate 1
 
 # Check system status
 python scripts/diary_cli.py status
+
+# Batch process episodes (generate missing narratives, titles, etc.)
+python scripts/diary_cli.py process --from 2024-01-01 --to 2024-03-31
 ```
 
 ### Guided Mode Questions

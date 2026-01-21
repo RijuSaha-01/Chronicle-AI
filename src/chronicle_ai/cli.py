@@ -15,6 +15,9 @@ from .recap import RecapGenerator
 from .exports import export_entry_to_markdown, export_weekly, export_daily
 from .season_manager import SeasonManager
 
+from rich.console import Console
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn
+
 
 # Guided mode questions
 GUIDED_QUESTIONS = [
@@ -394,6 +397,77 @@ def cmd_batch_synopsis(args):
     print(f"\n✅ Batch processing complete! {success_count}/{len(to_process)} episodes updated.")
 
 
+def cmd_process(args):
+    """Handle the 'process' command - batch generate content for a date range."""
+    repo = get_repository()
+    console = Console()
+    
+    if not is_ollama_available():
+        console.print("[bold red]❌ Ollama is not available. Please start Ollama to process entries.[/bold red]")
+        return
+
+    console.print(f"[bold cyan]🎬 Chronicle AI - Batch Processing[/bold cyan]")
+    console.print(f"📅 Range: {args.from_date} to {args.to_date}")
+    
+    # Get entries in range
+    entries = repo.list_entries_between_dates(args.from_date, args.to_date)
+    
+    if not entries:
+        console.print("[yellow]📭 No entries found in the specified date range.[/yellow]")
+        return
+
+    processed = 0
+    failed = 0
+    skipped = 0
+    
+    # Filter entries if not --force (Resume support)
+    to_process = []
+    for entry in entries:
+        # Check if fully processed (has narrative, title, synopsis, and conflict data)
+        is_processed = (entry.narrative_text and entry.title and 
+                        entry.synopsis and entry.conflict_data)
+        
+        if is_processed and not args.force:
+            skipped += 1
+        else:
+            to_process.append(entry)
+            
+    if not to_process:
+        console.print(f"[green]✅ All {len(entries)} entries in range are already processed.[/green]")
+        console.print(f"📊 Summary: {processed} processed, {failed} failed, {skipped} skipped.")
+        return
+
+    console.print(f"🔄 Processing {len(to_process)} entries ({skipped} already processed/skipped)...")
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        TimeRemainingColumn(),
+        console=console,
+        transient=True
+    ) as progress:
+        task = progress.add_task("Generating episodes...", total=len(to_process))
+        
+        for entry in to_process:
+            progress.update(task, description=f"Processing {entry.date} (ID: {entry.id})...")
+            try:
+                # Fully process narrative, title, synopsis, and conflict
+                # This uses the existing logic in llm_client
+                process_entry(entry, force=args.force)
+                repo.update_entry(entry)
+                processed += 1
+            except Exception as e:
+                console.print(f"[red]❌ Error processing {entry.date} (ID {entry.id}): {str(e)}[/red]")
+                failed += 1
+            
+            progress.advance(task)
+
+    console.print("\n[bold green]🏁 Batch Processing Complete![/bold green]")
+    console.print(f"📊 Summary: [bold white]{processed}[/bold white] processed, [bold red]{failed}[/bold red] failed, [bold yellow]{skipped}[/bold yellow] skipped.")
+
+
 def cmd_seasons(args):
     """Handle the 'seasons' command - list and create seasons."""
     repo = get_repository()
@@ -568,6 +642,12 @@ Examples:
     # Batch synopsis command
     batch_parser = subparsers.add_parser("batch-synopsis", help="Generate missing synopsis for all existing episodes")
     
+    # Process command
+    process_parser = subparsers.add_parser("process", help="Batch process episodes in a date range")
+    process_parser.add_argument("--from", dest="from_date", type=str, required=True, help="Start date (YYYY-MM-DD)")
+    process_parser.add_argument("--to", dest="to_date", type=str, required=True, help="End date (YYYY-MM-DD)")
+    process_parser.add_argument("--force", action="store_true", help="Reprocess already processed episodes")
+    
     # Seasons command
     seasons_parser = subparsers.add_parser("seasons", help="Manage life seasons")
     seasons_parser.add_argument("--list", action="store_true", help="List all seasons")
@@ -606,6 +686,7 @@ def main():
         "recap": cmd_recap,
         "retitle": cmd_retitle,
         "batch-synopsis": cmd_batch_synopsis,
+        "process": cmd_process,
         "seasons": cmd_seasons,
     }
     
