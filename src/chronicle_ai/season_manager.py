@@ -12,6 +12,7 @@ import json
 from .models import Entry, Season
 from .repository import EntryRepository, get_repository
 from .llm_client import _make_request
+from .director import director_engine
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +121,11 @@ Ensure every episode is included in exactly one season, and seasons are chronolo
 
 JSON Output:"""
 
+        import time
+        start = time.time()
         result = _make_request(prompt, timeout=60)
+        duration = time.time() - start
+        director_engine.perf_logger.log_event("season_smart_organization", duration)
         
         boundaries = []
         if result:

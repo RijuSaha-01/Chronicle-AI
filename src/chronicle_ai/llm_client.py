@@ -11,6 +11,7 @@ from .models import ConflictAnalysis
 from .style_guide import CinematicStyleGuide
 from .llm_utils import _make_request, is_ollama_available, OLLAMA_TIMEOUT
 from .conflict import ConflictDetector
+from .director import director_engine
 
 # Initialize the Cinematic Style Guide and Conflict Detector
 style_guide = CinematicStyleGuide()
@@ -85,12 +86,24 @@ Diary entry:
     prompt = style_guide.enhance_prompt(base_prompt, mood)
     prompt += "\n\nNarrative (2-4 sentences, cinematic style):"
 
+    # Check cache
+    cache_key = f"narrative_{hash(prompt)}"
+    cached = director_engine.cache.get(cache_key)
+    if cached:
+        return cached
+
     # 4. Request from LLM
+    import time
+    start = time.time()
     result = _make_request(prompt)
+    duration = time.time() - start
+    director_engine.perf_logger.log_event("generate_narrative", duration)
     
     if result:
         # 5. Enrich the output with sensory layers
-        return style_guide.add_sensory_layer(result)
+        final_narrative = style_guide.add_sensory_layer(result)
+        director_engine.cache.set(cache_key, final_narrative)
+        return final_narrative
     
     # Fallback when Ollama is not available
     logger.info("Using fallback narrative (Ollama offline)")
@@ -339,7 +352,20 @@ IMPORTANT: Output ONLY a raw JSON object with these keys:
     # Apply cinematic style guide to the prompt
     enhanced_prompt = style_guide.enhance_prompt(prompt, mood)
     
+    # Check cache
+    cache_key = f"full_process_{hash(enhanced_prompt)}"
+    cached = director_engine.cache.get(cache_key)
+    if cached:
+        # Populate entry from cached data
+        data = cached
+        _populate_entry_from_data(entry, data)
+        return
+
+    import time
+    start = time.time()
     result = _make_request(enhanced_prompt, timeout=90)
+    duration = time.time() - start
+    director_engine.perf_logger.log_event("full_process", duration)
     
     if result:
         try:
@@ -376,8 +402,43 @@ IMPORTANT: Output ONLY a raw JSON object with these keys:
                 entry.synopsis = meta.get('synopsis', '')
                 entry.keywords = meta.get('keywords', [])
                 
+                # Cache the successful result
+                director_engine.cache.set(cache_key, data)
                 return
         except Exception as e:
             raise Exception(f"Failed to parse integrated JSON: {e}")
 
     raise Exception("Ollama returned empty or invalid response for integrated processing.")
+
+
+def _populate_entry_from_data(entry, data: Dict) -> None:
+    """Helper to populate an entry object from a parsed data dictionary."""
+    from .models import ConflictAnalysis
+    
+    # 1. Conflict
+    c_data = data.get('conflict', {})
+    entry.conflict_data = ConflictAnalysis(
+        internal_conflicts=c_data.get('internal_conflicts', []),
+        external_conflicts=c_data.get('external_conflicts', []),
+        tension_level=c_data.get('tension_level', 1),
+        archetype=c_data.get('archetype', 'none'),
+        central_conflict=c_data.get('central_conflict', '')
+    )
+    
+    # 2. Narrative
+    narrative = data.get('narrative', '')
+    if narrative:
+        entry.narrative_text = style_guide.add_sensory_layer(narrative)
+    
+    # 3. Titles
+    titles = data.get('titles', [])
+    if titles:
+        entry.title_options = titles
+        best_opt = max(titles, key=lambda x: x.get('score', 0))
+        entry.title = best_opt.get('title')
+    
+    # 4. Metadata
+    meta = data.get('metadata', {})
+    entry.logline = meta.get('logline', '')
+    entry.synopsis = meta.get('synopsis', '')
+    entry.keywords = meta.get('keywords', [])

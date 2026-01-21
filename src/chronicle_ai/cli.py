@@ -14,6 +14,7 @@ from .llm_client import process_entry, is_ollama_available
 from .recap import RecapGenerator
 from .exports import export_entry_to_markdown, export_weekly, export_daily
 from .season_manager import SeasonManager
+from .director import director_engine
 
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn
@@ -583,6 +584,80 @@ def cmd_status(args):
     print("=" * 40)
 
 
+def cmd_benchmark(args):
+    """Handle the 'benchmark' command - run a full pipeline benchmark."""
+    repo = get_repository()
+    console = Console()
+    
+    console.print(f"\n[bold cyan]🎬 Chronicle AI - Director Engine Benchmark[/bold cyan]")
+    console.print("=" * 60)
+    
+    # 1. Prepare sample entries
+    console.print("🧪 Preparing 10 sample entries...")
+    samples = []
+    
+    # Try to grab 10 recent entries
+    recent = repo.list_recent_entries(10)
+    if len(recent) < 10:
+        console.print(f"⚠️  Only found {len(recent)} entries in database. Creating dummy entries for benchmark...")
+        # Create some dummy entries for testing if needed, or just use what we have
+        samples = recent
+        for i in range(10 - len(recent)):
+            samples.append(Entry(
+                date=f"2024-01-{i+1:02d}",
+                raw_text=f"Benchmark entry {i+1}: Today was a productive day. I worked on the new benchmark suite and optimized the LLM client. It felt good to see the performance improvements."
+            ))
+    else:
+        samples = recent[:10]
+        
+    # 2. Run benchmark
+    console.print(f"🚀 Processing {len(samples)} entries...")
+    
+    if not is_ollama_available():
+        console.print("[bold red]❌ Ollama is not available. Benchmark results will reflect fallback performance.[/bold red]")
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        console=console,
+        transient=True
+    ) as progress:
+        task = progress.add_task("Running benchmark...", total=len(samples))
+        
+        results = director_engine.run_benchmark(samples)
+        progress.update(task, completed=len(samples))
+
+    # 3. Report metrics
+    console.print("\n[bold green]📊 Benchmark Report[/bold green]")
+    console.print("-" * 30)
+    console.print(f"Total Duration: {results['total_duration']:.2f}s")
+    console.print(f"Average per Episode: {results['avg_duration']:.2f}s")
+    console.print("-" * 30)
+    
+    console.print("\n[bold]Component Breakdown:[/bold]")
+    for comp, stats in results['stats'].items():
+        console.print(f"  🔹 {comp}:")
+        console.print(f"     Average: {stats['avg']:.2f}s")
+        console.print(f"     Max:     {stats['max']:.2f}s")
+        console.print(f"     Count:   {stats['count']}")
+
+    console.print("\n[bold]Quality Checks:[/bold]")
+    valid_count = sum(1 for r in results['results'] if r['quality']['valid'])
+    console.print(f"  ✅ Pass Rate: {valid_count}/{len(samples)} ({valid_count/len(samples)*100:.0f}%)")
+    
+    issues = []
+    for r in results['results']:
+        if not r['quality']['valid']:
+            issues.extend(r['quality']['issues'])
+    
+    if issues:
+        console.print(f"  ❌ Major Issues: {', '.join(set(issues))}")
+
+    console.print("\n[bold cyan]Done![/bold cyan]")
+
+
 def create_parser() -> argparse.ArgumentParser:
     """Create and configure the argument parser."""
     parser = argparse.ArgumentParser(
@@ -662,6 +737,9 @@ Examples:
     # Status command
     subparsers.add_parser("status", help="Show system status")
     
+    # Benchmark command
+    subparsers.add_parser("benchmark", help="Run full pipeline benchmark and report stats")
+    
     return parser
 
 
@@ -688,6 +766,7 @@ def main():
         "batch-synopsis": cmd_batch_synopsis,
         "process": cmd_process,
         "seasons": cmd_seasons,
+        "benchmark": cmd_benchmark,
     }
     
     handler = commands.get(args.command)

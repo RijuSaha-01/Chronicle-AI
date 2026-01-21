@@ -9,6 +9,7 @@ import logging
 from typing import Optional
 from .models import ConflictAnalysis
 from .llm_utils import _make_request
+from .director import director_engine
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +45,11 @@ Diary Entry:
 
 JSON Response:"""
 
+        import time
+        start = time.time()
         result = _make_request(prompt)
+        duration = time.time() - start
+        director_engine.perf_logger.log_event("conflict_analysis", duration)
         
         if result:
             try:

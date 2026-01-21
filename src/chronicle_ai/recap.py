@@ -10,6 +10,7 @@ from datetime import date
 from .models import Entry, Recap
 from .repository import get_repository
 from .llm_client import _make_request
+from .director import director_engine
 
 
 class RecapGenerator:
@@ -61,7 +62,12 @@ GENERATE RECAP (2-3 paragraphs, TV narrator style):
 "Previously on Chronicle..."
 """
 
+        import time
+        start = time.time()
         content = _make_request(prompt)
+        duration = time.time() - start
+        director_engine.perf_logger.log_event("recap_generation", duration)
+        
         if not content:
             content = "Previously on Chronicle... The journey continues as our protagonist navigates the complexities of daily life, facing internal struggles and external challenges in an ever-unfolding narrative."
 
