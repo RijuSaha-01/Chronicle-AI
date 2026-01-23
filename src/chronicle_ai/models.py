@@ -178,6 +178,7 @@ class Entry:
     keywords: List[str] = field(default_factory=list)
     recap_id: Optional[int] = None
     season_id: Optional[int] = None
+    cover_art_path: Optional[str] = None
     
     def to_dict(self) -> dict:
         """Convert entry to dictionary for serialization."""
@@ -193,7 +194,8 @@ class Entry:
             "keywords": self.keywords,
             "conflict_data": self.conflict_data.to_dict() if self.conflict_data else None,
             "recap_id": self.recap_id,
-            "season_id": self.season_id
+            "season_id": self.season_id,
+            "cover_art_path": self.cover_art_path
         }
     
     @classmethod
@@ -211,7 +213,8 @@ class Entry:
             keywords=data.get("keywords", []),
             conflict_data=ConflictAnalysis.from_dict(data.get("conflict_data")) if data.get("conflict_data") else None,
             recap_id=data.get("recap_id"),
-            season_id=data.get("season_id")
+            season_id=data.get("season_id"),
+            cover_art_path=data.get("cover_art_path")
         )
     
     def snippet(self, max_length: int = 100) -> str:

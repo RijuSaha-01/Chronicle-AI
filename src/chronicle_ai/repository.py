@@ -72,6 +72,8 @@ class EntryRepository:
                 cursor.execute("ALTER TABLE diary_entries ADD COLUMN synopsis TEXT")
             if 'keywords' not in columns:
                 cursor.execute("ALTER TABLE diary_entries ADD COLUMN keywords TEXT")
+            if 'cover_art_path' not in columns:
+                cursor.execute("ALTER TABLE diary_entries ADD COLUMN cover_art_path TEXT")
             
             # Create recaps table if it doesn't exist
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='recaps'")
@@ -122,7 +124,8 @@ class EntryRepository:
                     keywords TEXT,
                     conflict_data TEXT,
                     recap_id INTEGER,
-                    season_id INTEGER
+                    season_id INTEGER,
+                    cover_art_path TEXT
                 )
             """)
             cursor.execute("""
@@ -164,8 +167,8 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            """INSERT INTO diary_entries (date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id) 
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO diary_entries (date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path) 
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 entry.date, 
                 entry.raw_text, 
@@ -177,7 +180,8 @@ class EntryRepository:
                 json.dumps(entry.keywords) if entry.keywords else None,
                 json.dumps(entry.conflict_data.to_dict()) if entry.conflict_data else None,
                 entry.recap_id,
-                entry.season_id
+                entry.season_id,
+                entry.cover_art_path
             )
         )
         
@@ -205,7 +209,7 @@ class EntryRepository:
         
         cursor.execute(
             """UPDATE diary_entries 
-               SET date = ?, raw_text = ?, narrative_text = ?, title = ?, title_options = ?, logline = ?, synopsis = ?, keywords = ?, conflict_data = ?, recap_id = ?, season_id = ?
+               SET date = ?, raw_text = ?, narrative_text = ?, title = ?, title_options = ?, logline = ?, synopsis = ?, keywords = ?, conflict_data = ?, recap_id = ?, season_id = ?, cover_art_path = ?
                WHERE id = ?""",
             (
                 entry.date, 
@@ -219,6 +223,7 @@ class EntryRepository:
                 json.dumps(entry.conflict_data.to_dict()) if entry.conflict_data else None,
                 entry.recap_id,
                 entry.season_id,
+                entry.cover_art_path,
                 entry.id
             )
         )
@@ -242,7 +247,7 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            "SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id FROM diary_entries WHERE id = ?",
+            "SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path FROM diary_entries WHERE id = ?",
             (entry_id,)
         )
         row = cursor.fetchone()
@@ -272,7 +277,7 @@ class EntryRepository:
         conn = self._get_connection()
         cursor = conn.cursor()
         
-        query = "SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id FROM diary_entries ORDER BY date DESC, id DESC"
+        query = "SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path FROM diary_entries ORDER BY date DESC, id DESC"
         if limit:
             query += f" LIMIT {int(limit)}"
         
@@ -320,7 +325,7 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            """SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id 
+            """SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path 
                FROM diary_entries 
                WHERE date >= ? AND date <= ?
                ORDER BY date DESC, id DESC""",
