@@ -363,6 +363,32 @@ def cmd_retitle(args):
             pattern = opt.get('pattern', 'N/A')
             score = opt.get('score', 0)
             print(f"- {opt['title']} [{pattern}] (Score: {score:.2f})")
+
+
+def cmd_visual_prompt(args):
+    """Handle the 'visual-prompt' command - generate SD prompts for an episode."""
+    repo = get_repository()
+    entry = repo.get_entry_by_id(args.id)
+    
+    if not entry:
+        print(f"❌ Entry with ID {args.id} not found.")
+        return
+    
+    print(f"🎨 Generating Visual Prompt for Episode {args.id}...")
+    
+    from .visual_prompts import mood_to_visual
+    positive, negative = mood_to_visual.generate_cover_prompt(entry)
+    
+    print("\n" + "=" * 60)
+    print(f"🎬 Title: {entry.display_title()}")
+    print("=" * 60)
+    print("\n✅ Positive Prompt (SD-Optimized):")
+    print("-" * 40)
+    print(positive)
+    print("\n❌ Negative Prompt:")
+    print("-" * 40)
+    print(negative)
+    print("\n" + "=" * 60)
             
             
 def cmd_batch_synopsis(args):
@@ -734,6 +760,10 @@ Examples:
     seasons_parser.add_argument("--title", type=str, help="Title for manual season")
     seasons_parser.add_argument("--analyze", type=int, help="Perform narrative arc analysis on a season by ID")
     
+    # Visual prompt command
+    visual_parser = subparsers.add_parser("visual-prompt", help="Generate Stable Diffusion prompts for an episode's cover art")
+    visual_parser.add_argument("id", type=int, help="Entry ID to analyze")
+
     # Status command
     subparsers.add_parser("status", help="Show system status")
     
@@ -767,6 +797,7 @@ def main():
         "process": cmd_process,
         "seasons": cmd_seasons,
         "benchmark": cmd_benchmark,
+        "visual-prompt": cmd_visual_prompt,
     }
     
     handler = commands.get(args.command)
