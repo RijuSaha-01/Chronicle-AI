@@ -94,5 +94,32 @@ class TestSeasonManager:
             assert season_jan.end_date == "2024-01-15"
             assert season_jan.episode_count == 2
 
+class TestSynopsisGeneration:
+    @patch("chronicle_ai.llm_client._make_request")
+    def test_generate_synopsis(self, mock_request):
+        from chronicle_ai.llm_client import generate_synopsis
+        mock_request.return_value = '{"logline": "A secret meeting reveals a truth that changes everything for the team.", "synopsis": "The protagonist attends a mysterious late-night meeting. They discover a hidden agenda.", "keywords": ["secret", "truth", "team", "mystery", "revelation"]}'
+        
+        result = generate_synopsis("Some long narrative about a secret meeting.")
+        
+        assert result["logline"] == "A secret meeting reveals a truth that changes everything for the team."
+        assert "hidden agenda" in result["synopsis"]
+        assert len(result["keywords"]) == 5
+        assert "secret" in result["keywords"]
+
+    @patch("chronicle_ai.llm_client._make_request")
+    def test_generate_synopsis_enforcement(self, mock_request):
+        from chronicle_ai.llm_client import generate_synopsis
+        # Logline with more than 15 words
+        long_logline = "This is a very long logline that definitely has way more than fifteen words in it to test if the trimming logic works as expected."
+        mock_request.return_value = f'{{"logline": "{long_logline}", "synopsis": "Short summary.", "keywords": ["a", "b", "c", "d", "e", "f", "g"]}}'
+        
+        result = generate_synopsis("Context")
+        
+        # Should be trimmed to 15 words
+        logline_words = result["logline"].replace("...", "").split()
+        assert len(logline_words) <= 15
+        assert len(result["keywords"]) == 5
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
