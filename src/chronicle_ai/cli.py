@@ -397,33 +397,34 @@ def cmd_batch_synopsis(args):
     """Handle 'batch-synopsis' command - generate missing synopsis for all episodes."""
     repo = get_repository()
     entries = repo.list_entries()
+    console = Console()
     
     to_process = [e for e in entries if not e.logline or not e.synopsis]
     
     if not to_process:
-        print("✅ All episodes already have synopsis metadata.")
+        console.print("[green]✅ All episodes already have synopsis metadata.[/green]")
         return
         
-    print(f"🤖 Found {len(to_process)} episodes missing synopsis metadata.")
-    print(f"🔄 Starting batch generation (this may take a while)...")
+    console.print(f"[cyan]🤖 Found {len(to_process)} episodes missing synopsis metadata.[/cyan]")
+    console.print(f"🔄 Starting batch generation (this may take a while)...")
     
     if not is_ollama_available():
-        print("❌ Ollama not available.")
+        console.print("[red]❌ Ollama not available.[/red]")
         return
 
     from .llm_client import ensure_synopsis
     
     success_count = 0
     for i, entry in enumerate(to_process, 1):
-        print(f"[{i}/{len(to_process)}] Processing Episode {entry.id}: {entry.display_title()}...")
+        console.print(f"[[bold cyan]{i}/{len(to_process)}[/bold cyan]] Processing Episode {entry.id}: {entry.display_title()}...")
         try:
             ensure_synopsis(entry)
             repo.update_entry(entry)
             success_count += 1
         except Exception as e:
-            print(f"  ❌ Failed: {e}")
+            console.print(f"  [red]❌ Failed: {e}[/red]")
             
-    print(f"\n✅ Batch processing complete! {success_count}/{len(to_process)} episodes updated.")
+    console.print(f"\n[bold green]✅ Batch processing complete! {success_count}/{len(to_process)} episodes updated.[/bold green]")
 
 
 def cmd_process(args):
