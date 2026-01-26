@@ -59,9 +59,22 @@ def export_entry_to_markdown(entry: Entry, output_dir: Optional[str] = None) -> 
     # Narrative section
     lines.append("## 📖 Narrative")
     lines.append("")
+    if entry.logline:
+        lines.append(f"> **Logline:** {entry.logline}")
+        lines.append("")
+    
     narrative = entry.narrative_text or "_No narrative generated yet._"
     lines.append(narrative)
     lines.append("")
+    
+    if entry.synopsis:
+        lines.append("### 📝 Synopsis")
+        lines.append(entry.synopsis)
+        lines.append("")
+    
+    if entry.keywords:
+        lines.append(f"**🏷️ Keywords:** {', '.join(entry.keywords)}")
+        lines.append("")
     
     # Raw text section (collapsible details)
     lines.append("---")

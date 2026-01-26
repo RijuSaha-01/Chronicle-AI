@@ -170,6 +170,8 @@ def cmd_list(args):
         print(f"   🎬 {title}")
         if entry.logline:
             print(f"   💡 {entry.logline}")
+        if entry.keywords:
+            print(f"   🏷️  {', '.join(entry.keywords)}")
         print(f"   📝 {snippet}")
     
     print("\n" + "=" * 60)

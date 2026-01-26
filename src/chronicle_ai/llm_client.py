@@ -228,13 +228,30 @@ JSON Output:"""
         try:
             import json
             import re
-            json_match = re.search(r'{{.*}}', result, re.DOTALL)
+            # Extract JSON from the response
+            json_match = re.search(r'\{.*\}', result, re.DOTALL)
             if json_match:
                 data = json.loads(json_match.group(0))
+                
+                # Extract and clean fields
+                logline = str(data.get("logline", "")).strip()
+                synopsis = str(data.get("synopsis", "")).strip()
+                keywords = [str(k).strip() for k in data.get("keywords", [])]
+                
+                # Strict enforcement: Max 15 words for logline (Requirement)
+                words = logline.split()
+                if len(words) > 15:
+                    logline = " ".join(words[:15])
+                    if not logline.endswith('.'):
+                        logline += "..."
+                
+                # Ensure exactly 5 keywords
+                keywords = keywords[:5]
+                
                 return {
-                    "logline": str(data.get("logline", "")).strip(),
-                    "synopsis": str(data.get("synopsis", "")).strip(),
-                    "keywords": [str(k).strip() for k in data.get("keywords", [])[:5]]
+                    "logline": logline,
+                    "synopsis": synopsis,
+                    "keywords": keywords
                 }
         except Exception as e:
             logging.error(f"Failed to parse synopsis JSON: {e}")
