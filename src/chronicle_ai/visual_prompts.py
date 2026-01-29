@@ -6,13 +6,14 @@ Mood-to-Visual Prompt Converter for SD-optimized cover art prompts.
 import logging
 from typing import Dict, List, Tuple, Optional
 from .models import Entry
-from .llm_client import detect_mood, _make_request
+from .llm_utils import _make_request
 
 class MoodToVisualPrompt:
     """
     Converts episode moods and narratives into rich, SD-optimized visual prompts.
     """
     
+    # Library of 14 mood mappings (10+ as requested)
     MOOD_LIBRARY = {
         "anxious": {
             "elements": "cool blues, harsh shadows, isolated figure, frantic brushstrokes, sharp angles",
@@ -73,6 +74,30 @@ class MoodToVisualPrompt:
             "lighting": "faded warm light, light leaks",
             "atmosphere": "sentimental, soft, dreamlike",
             "negative": "modern, high-tech, sharp, digital, neon, futuristic"
+        },
+        "mysterious": {
+            "elements": "deep purples, fog, hidden details, occult symbols, obscured face",
+            "lighting": "dim moonlight, flickering candles",
+            "atmosphere": "enigmatic, secretive, dark",
+            "negative": "clear, bright, sunny, simple, obvious"
+        },
+        "determined": {
+            "elements": "strong contrast, forward motion, clenched fist, urban grit, focused gaze",
+            "lighting": "stark side lighting, hard shadows",
+            "atmosphere": "resilient, gritty, intense",
+            "negative": "soft, weak, lazy, blurry, peaceful"
+        },
+        "exhausted": {
+            "elements": "desaturated tones, heavy lids, slumped posture, cluttered background, dying light",
+            "lighting": "dim twilight, fading embers",
+            "atmosphere": "weary, drained, heavy",
+            "negative": "energetic, bright, fresh, active"
+        },
+        "joyful": {
+            "elements": "bright yellows, laughter, colorful confetti, vibrant flowers, upward motion",
+            "lighting": "brilliant sunlight, rainbow refraction",
+            "atmosphere": "happy, lighthearted, exuberant",
+            "negative": "sad, dark, muted, rain, shadows"
         }
     }
 
@@ -96,6 +121,22 @@ Visual elements (short phrases, comma separated):"""
             return result.strip().strip('"')
         return ""
 
+    def _detect_detailed_mood(self, text: str) -> str:
+        """Use LLM to detect specific mood from the library."""
+        moods = ", ".join(self.MOOD_LIBRARY.keys())
+        prompt = f"""Analyze the following text and pick the most appropriate mood from this list: {moods}.
+Only output the single word for the mood.
+
+Text: {text}
+Mood:"""
+        
+        result = _make_request(prompt, timeout=15)
+        if result:
+            detected = result.strip().lower().strip('.')
+            if detected in self.MOOD_LIBRARY:
+                return detected
+        return "peaceful" # Default
+
     def generate_cover_prompt(self, episode: Entry) -> Tuple[str, str]:
         """
         Generate a positive and negative prompt for the episode's cover art.
@@ -107,15 +148,17 @@ Visual elements (short phrases, comma separated):"""
             A tuple of (positive_prompt, negative_prompt).
         """
         text = episode.narrative_text or episode.raw_text
-        mood = detect_mood(text)
-        
-        # Default to neutral/peaceful if mood not in library
+        if not text:
+            return "", ""
+            
+        # 1. Detect mood (more granular than basic detect_mood)
+        mood = self._detect_detailed_mood(text)
         mood_data = self.MOOD_LIBRARY.get(mood, self.MOOD_LIBRARY["peaceful"])
         
-        # Extract visual moments from narrative
+        # 2. Extract visual moments from narrative
         visual_moments = self._extract_visual_moments(text)
         
-        # Compose positive prompt
+        # 3. Compose SD-optimized positive prompt
         components = [
             f"A {mood} scene",
             visual_moments,
@@ -125,8 +168,9 @@ Visual elements (short phrases, comma separated):"""
             self.QUALITY_BOOSTERS
         ]
         
-        # Filter out empty components
         positive_prompt = ", ".join([c for c in components if c])
+        
+        # 4. Generate appropriate negative prompts per mood
         negative_prompt = f"low quality, blurry, distorted, {mood_data['negative']}"
         
         return positive_prompt, negative_prompt
