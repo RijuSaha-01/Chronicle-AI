@@ -15,6 +15,7 @@ from .recap import RecapGenerator
 from .exports import export_entry_to_markdown, export_weekly, export_daily
 from .season_manager import SeasonManager
 from .director import director_engine
+from .cover_gen import cover_generator
 
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn
@@ -393,6 +394,25 @@ def cmd_visual_prompt(args):
     print("\n" + "=" * 60)
             
             
+def cmd_generate_cover(args):
+    """Handle the 'generate-cover' command."""
+    from rich.console import Console
+    console = Console()
+    
+    episode_id = args.episode
+    regenerate = getattr(args, "regenerate", False)
+    
+    console.print(f"[bold cyan]🎨 Generating Episode Cover Art for ID: {episode_id}[/bold cyan]")
+    
+    path = cover_generator.generate_cover(episode_id, regenerate=regenerate)
+    
+    if path:
+        console.print(f"[bold green]✅ Success![/bold green] Cover art saved to: [white]{path}[/white]")
+    else:
+        console.print("[bold red]❌ Failed to generate cover art.[/bold red]")
+        console.print("[yellow]Tip: Ensure your Stable Diffusion backend (ComfyUI) is running at http://127.0.0.1:8188[/yellow]")
+
+
 def cmd_batch_synopsis(args):
     """Handle 'batch-synopsis' command - generate missing synopsis for all episodes."""
     repo = get_repository()
@@ -773,6 +793,11 @@ Examples:
     # Benchmark command
     subparsers.add_parser("benchmark", help="Run full pipeline benchmark and report stats")
     
+    # Generate cover command
+    cover_parser = subparsers.add_parser("generate-cover", help="Generate cinematic cover art for an episode")
+    cover_parser.add_argument("--episode", type=int, required=True, help="Episode ID to generate art for")
+    cover_parser.add_argument("--regenerate", action="store_true", help="Force regeneration if cover already exists")
+    
     return parser
 
 
@@ -801,6 +826,7 @@ def main():
         "seasons": cmd_seasons,
         "benchmark": cmd_benchmark,
         "visual-prompt": cmd_visual_prompt,
+        "generate-cover": cmd_generate_cover,
     }
     
     handler = commands.get(args.command)

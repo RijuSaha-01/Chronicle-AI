@@ -17,6 +17,7 @@ from .exports import export_entry_to_markdown, export_weekly
 from .processor import segment_diary_text
 from .style_guide import CinematicStyleGuide
 from .image_client import ImageGenerator
+from .cover_gen import cover_generator
 
 __all__ = [
     "__version__",
@@ -31,4 +32,5 @@ __all__ = [
     "segment_diary_text",
     "CinematicStyleGuide",
     "ImageGenerator",
+    "cover_generator",
 ]
