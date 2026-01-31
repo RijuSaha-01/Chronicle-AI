@@ -61,23 +61,22 @@ class EpisodeCoverGenerator:
             self.repo.update_entry(episode)
 
         # 2. Use MoodToVisualPrompt to create the prompt
-        pos_prompt, neg_prompt = mood_to_visual.generate_cover_prompt(episode)
+        style = self.repo.get_setting("visual_style", "cinematic")
+        pos_prompt, neg_prompt, preset = mood_to_visual.generate_cover_prompt(episode, style_name=style)
         
         # Inject central conflict into the prompt for narrative depth
         if episode.conflict_data and episode.conflict_data.central_conflict:
             pos_prompt = f"{pos_prompt}, depicting the struggle of: {episode.conflict_data.central_conflict}"
 
-        # Apply consistent style tokens for visual identity
-        pos_prompt = f"{pos_prompt}, {self.STYLE_TOKENS}"
-
         # 3. Generate 16:9 landscape cover (1280x720)
-        logger.info(f"Generating 16:9 cover for episode {episode_id}...")
+        logger.info(f"Generating 16:9 cover for episode {episode_id} using style: {style}...")
         image_bytes = self.image_gen.generate(
             prompt=pos_prompt,
             negative_prompt=neg_prompt,
             width=1280,
             height=720,
-            steps=25
+            steps=preset.get("steps", 25),
+            sampler_name=preset.get("sampler")
         )
 
         if not image_bytes:

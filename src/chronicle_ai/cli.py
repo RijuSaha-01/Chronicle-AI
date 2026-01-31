@@ -380,7 +380,8 @@ def cmd_visual_prompt(args):
     print(f"🎨 Generating Visual Prompt for Episode {args.id}...")
     
     from .visual_prompts import mood_to_visual
-    positive, negative = mood_to_visual.generate_cover_prompt(entry)
+    style = repo.get_setting("visual_style", "cinematic")
+    positive, negative, preset = mood_to_visual.generate_cover_prompt(entry, style_name=style)
     
     print("\n" + "=" * 60)
     print(f"🎬 Title: {entry.display_title()}")
@@ -391,6 +392,9 @@ def cmd_visual_prompt(args):
     print("\n❌ Negative Prompt:")
     print("-" * 40)
     print(negative)
+    print(f"\n⚙️  Style Settings ({preset['name']}):")
+    print(f"   Sampler: {preset['sampler']}")
+    print(f"   Steps: {preset['steps']}")
     print("\n" + "=" * 60)
             
             
@@ -633,6 +637,29 @@ def cmd_status(args):
     print("=" * 40)
 
 
+def cmd_config(args):
+    """Handle the 'config' command - manage user settings."""
+    repo = get_repository()
+    
+    if args.style:
+        style = args.style.lower()
+        from .visual_prompts import VisualStylePresets
+        if style in VisualStylePresets.PRESETS:
+            repo.set_setting("visual_style", style)
+            print(f"✅ Visual style updated to: [bold cyan]{style.upper()}[/bold cyan]")
+            print(f"📝 Description: {VisualStylePresets.PRESETS[style]['description']}")
+        else:
+            print(f"❌ Invalid style: {style}")
+            print(f"💡 Available styles: {', '.join(VisualStylePresets.PRESETS.keys())}")
+    else:
+        # Show current config
+        style = repo.get_setting("visual_style", "cinematic")
+        print("\n🎬 Chronicle AI Configuration")
+        print("=" * 40)
+        print(f"🎨 Active Visual Style: {style.upper()}")
+        print("=" * 40)
+
+
 def cmd_benchmark(args):
     """Handle the 'benchmark' command - run a full pipeline benchmark."""
     repo = get_repository()
@@ -786,6 +813,11 @@ Examples:
     # Visual prompt command
     visual_parser = subparsers.add_parser("visual-prompt", help="Generate Stable Diffusion prompts for an episode's cover art")
     visual_parser.add_argument("id", type=int, help="Entry ID to analyze")
+    
+    # Config command
+    config_parser = subparsers.add_parser("config", help="Manage system configuration and preferences")
+    config_parser.add_argument("--style", type=str, choices=["cinematic", "anime", "noir", "watercolor", "minimalist"], 
+                              help="Set the default visual style for cover art")
 
     # Status command
     subparsers.add_parser("status", help="Show system status")
@@ -827,6 +859,7 @@ def main():
         "benchmark": cmd_benchmark,
         "visual-prompt": cmd_visual_prompt,
         "generate-cover": cmd_generate_cover,
+        "config": cmd_config,
     }
     
     handler = commands.get(args.command)

@@ -122,7 +122,7 @@ class ImageGenerator:
             logger.error(f"Failed to list models: {e}")
             return []
 
-    def generate(self, prompt: str, negative_prompt: str = "", width: int = 1280, height: int = 720, steps: int = 20, seed: Optional[int] = None) -> Optional[bytes]:
+    def generate(self, prompt: str, negative_prompt: str = "", width: int = 1280, height: int = 720, steps: int = 20, seed: Optional[int] = None, sampler_name: Optional[str] = None) -> Optional[bytes]:
         """
         Generate an image from a text prompt.
 
@@ -133,6 +133,7 @@ class ImageGenerator:
             height: Image height
             steps: Number of sampling steps
             seed: Random seed (optional)
+            sampler_name: Sampler to use (e.g., "Euler a", "DPM++ 2M Karras")
 
         Returns:
             Optional[bytes]: Raw image bytes or None if failed
@@ -142,14 +143,14 @@ class ImageGenerator:
 
         try:
             if self.backend == "automatic1111":
-                return self._generate_a1111(prompt, negative_prompt, width, height, steps, seed)
+                return self._generate_a1111(prompt, negative_prompt, width, height, steps, seed, sampler_name)
             else:
-                return self._generate_comfyui(prompt, negative_prompt, width, height, steps, seed)
+                return self._generate_comfyui(prompt, negative_prompt, width, height, steps, seed, sampler_name)
         except Exception as e:
             logger.error(f"Image generation failed: {e}")
             return None
 
-    def _generate_a1111(self, prompt: str, negative_prompt: str, width: int, height: int, steps: int, seed: int) -> Optional[bytes]:
+    def _generate_a1111(self, prompt: str, negative_prompt: str, width: int, height: int, steps: int, seed: int, sampler_name: Optional[str] = None) -> Optional[bytes]:
         payload = {
             "prompt": prompt,
             "negative_prompt": negative_prompt,
@@ -158,7 +159,7 @@ class ImageGenerator:
             "height": height,
             "seed": seed,
             "cfg_scale": 7.0,
-            "sampler_name": "Euler a"
+            "sampler_name": sampler_name or "Euler a"
         }
         if self.default_model:
              # A1111 requires setting the model via options if you want to change it
@@ -170,7 +171,20 @@ class ImageGenerator:
             return base64.b64decode(res["images"][0])
         return None
 
-    def _generate_comfyui(self, prompt: str, negative_prompt: str, width: int, height: int, steps: int, seed: int) -> Optional[bytes]:
+    def _generate_comfyui(self, prompt: str, negative_prompt: str, width: int, height: int, steps: int, seed: int, sampler_name: Optional[str] = None) -> Optional[bytes]:
+        # Map some common sampler names to ComfyUI format if needed
+        # ComfyUI uses "euler", "euler_ancestral", "dpmpp_2m_sde", etc.
+        # This is a basic mapping
+        cf_sampler = sampler_name or "euler"
+        if "dpm++ 2m karras" in cf_sampler.lower():
+            cf_sampler = "dpmpp_2m"
+            scheduler = "karras"
+        elif "dpm++ sde karras" in cf_sampler.lower():
+            cf_sampler = "dpmpp_sde"
+            scheduler = "karras"
+        else:
+            scheduler = "normal"
+
         # Minimalist Workflow for ComfyUI
         workflow = {
             "3": {
@@ -182,8 +196,8 @@ class ImageGenerator:
                     "model": ["4", 0],
                     "negative": ["7", 0],
                     "positive": ["6", 0],
-                    "sampler_name": "euler",
-                    "scheduler": "normal",
+                    "sampler_name": cf_sampler,
+                    "scheduler": scheduler,
                     "seed": seed,
                     "steps": steps
                 }

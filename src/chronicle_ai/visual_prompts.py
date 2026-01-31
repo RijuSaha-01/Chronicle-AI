@@ -8,6 +8,63 @@ from typing import Dict, List, Tuple, Optional
 from .models import Entry
 from .llm_utils import _make_request
 
+class VisualStylePresets:
+    """
+    Defines 5 distinct visual looks for Chronicle AI cover art.
+    """
+    CINEMATIC = {
+        "name": "CINEMATIC",
+        "description": "Film grain, dramatic lighting, realistic photography style",
+        "positive": "cinematic film, 35mm, film grain, dramatic lighting, realistic photography, masterful cinematography, high dynamic range",
+        "negative": "cartoon, anime, drawing, illustration, sketch, low contrast, flat lighting, CG, 3d render",
+        "sampler": "DPM++ 2M Karras",
+        "steps": 30
+    }
+    ANIME = {
+        "name": "ANIME",
+        "description": "Studio Ghibli inspired, soft colors, illustrated style",
+        "positive": "studio ghibli style, anime art, soft colors, illustrated, high quality cel shading, whimsical atmosphere, hand-drawn look",
+        "negative": "photography, realistic, 3d render, low quality, messy, noisy, dark, gritty",
+        "sampler": "Euler a",
+        "steps": 25
+    }
+    NOIR = {
+        "name": "NOIR",
+        "description": "Black and white, high contrast, dramatic shadows",
+        "positive": "black and white, high contrast, dramatic shadows, film noir, gritty urban setting, moody lighting, 1940s aesthetic, sharp focus",
+        "negative": "color, bright, sunny, cheerful, soft, low contrast, modern, futuristic",
+        "sampler": "DPM++ SDE Karras",
+        "steps": 35
+    }
+    WATERCOLOR = {
+        "name": "WATERCOLOR",
+        "description": "Soft, artistic, dreamy, painterly",
+        "positive": "watercolor painting, soft artistic edges, dreamy, painterly style, paper texture, fluid brushstrokes, pastel palette, ethereal",
+        "negative": "realistic, photography, sharp, hard edges, digital art, neon, high contrast, dark",
+        "sampler": "Euler a",
+        "steps": 20
+    }
+    MINIMALIST = {
+        "name": "MINIMALIST",
+        "description": "Simple shapes, limited palette, clean design",
+        "positive": "minimalist design, simple shapes, limited palette, clean lines, flat design, modern aesthetic, spacious composition, sharp focus",
+        "negative": "cluttered, detailed, busy, realistic, complex textures, messy, dark, gritty",
+        "sampler": "DPM++ 2M Karras",
+        "steps": 25
+    }
+
+    PRESETS = {
+        "cinematic": CINEMATIC,
+        "anime": ANIME,
+        "noir": NOIR,
+        "watercolor": WATERCOLOR,
+        "minimalist": MINIMALIST
+    }
+
+    @classmethod
+    def get_preset(cls, name: str) -> Dict:
+        return cls.PRESETS.get(name.lower(), cls.CINEMATIC)
+
 class MoodToVisualPrompt:
     """
     Converts episode moods and narratives into rich, SD-optimized visual prompts.
@@ -82,7 +139,7 @@ class MoodToVisualPrompt:
             "negative": "clear, bright, sunny, simple, obvious"
         },
         "determined": {
-            "elements": "strong contrast, forward motion, clenched fist, urban grit, focused gaze",
+            "elements": "strong contrast, forward motion, clenched focus, urban grit, focused gaze",
             "lighting": "stark side lighting, hard shadows",
             "atmosphere": "resilient, gritty, intense",
             "negative": "soft, weak, lazy, blurry, peaceful"
@@ -101,7 +158,7 @@ class MoodToVisualPrompt:
         }
     }
 
-    QUALITY_BOOSTERS = "masterpiece, 8k, highly detailed, photorealistic, cinematic lighting, dramatic composition, professional photography"
+    QUALITY_BOOSTERS = "masterpiece, 8k, highly detailed, professional composition"
 
     def __init__(self):
         self.logger = logging.getLogger(__name__)
@@ -137,43 +194,49 @@ Mood:"""
                 return detected
         return "peaceful" # Default
 
-    def generate_cover_prompt(self, episode: Entry) -> Tuple[str, str]:
+    def generate_cover_prompt(self, episode: Entry, style_name: str = "cinematic") -> Tuple[str, str, Dict]:
         """
-        Generate a positive and negative prompt for the episode's cover art.
+        Generate a positive and negative prompt for the episode's cover art based on a style preset.
         
         Args:
             episode: The Entry object containing narrative and other metadata.
+            style_name: The name of the visual style preset to use.
             
         Returns:
-            A tuple of (positive_prompt, negative_prompt).
+            A tuple of (positive_prompt, negative_prompt, style_metadata).
         """
         text = episode.narrative_text or episode.raw_text
         if not text:
-            return "", ""
+            return "", "", {}
             
-        # 1. Detect mood (more granular than basic detect_mood)
+        # 1. Detect mood
         mood = self._detect_detailed_mood(text)
         mood_data = self.MOOD_LIBRARY.get(mood, self.MOOD_LIBRARY["peaceful"])
         
         # 2. Extract visual moments from narrative
         visual_moments = self._extract_visual_moments(text)
         
-        # 3. Compose SD-optimized positive prompt
+        # 3. Get Style Preset
+        preset = VisualStylePresets.get_preset(style_name)
+        
+        # 4. Compose SD-optimized positive prompt
         components = [
             f"A {mood} scene",
             visual_moments,
             mood_data["elements"],
             f"Lighting: {mood_data['lighting']}",
             f"Atmosphere: {mood_data['atmosphere']}",
+            preset["positive"],
             self.QUALITY_BOOSTERS
         ]
         
         positive_prompt = ", ".join([c for c in components if c])
         
-        # 4. Generate appropriate negative prompts per mood
-        negative_prompt = f"low quality, blurry, distorted, {mood_data['negative']}"
+        # 5. Generate appropriate negative prompts
+        negative_prompt = f"low quality, blurry, distorted, {mood_data['negative']}, {preset['negative']}"
         
-        return positive_prompt, negative_prompt
+        return positive_prompt, negative_prompt, preset
 
 # Initialize a global instance
 mood_to_visual = MoodToVisualPrompt()
+

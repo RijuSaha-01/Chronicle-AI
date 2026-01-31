@@ -109,6 +109,18 @@ class EntryRepository:
                 season_columns = {row['name'] for row in cursor.fetchall()}
                 if 'arc_analysis' not in season_columns:
                     cursor.execute("ALTER TABLE seasons ADD COLUMN arc_analysis TEXT")
+
+            # Create settings table if it doesn't exist
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='settings'")
+            if cursor.fetchone() is None:
+                cursor.execute("""
+                    CREATE TABLE settings (
+                        key TEXT PRIMARY KEY,
+                        value TEXT NOT NULL
+                    )
+                """)
+                # Set default visual style
+                cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ("visual_style", "cinematic"))
         else:
             # Create table with all columns
             cursor.execute("""
@@ -149,9 +161,36 @@ class EntryRepository:
                     arc_analysis TEXT
                 )
             """)
+            cursor.execute("""
+                CREATE TABLE settings (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                )
+            """)
+            cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ("visual_style", "cinematic"))
         
         conn.commit()
         conn.close()
+    
+    # --- Settings Methods ---
+
+    def get_setting(self, key: str, default: Optional[str] = None) -> Optional[str]:
+        """Get a setting value by key."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT value FROM settings WHERE key = ?", (key,))
+        row = cursor.fetchone()
+        conn.close()
+        return row['value'] if row else default
+
+    def set_setting(self, key: str, value: str):
+        """Set a setting value."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, value))
+        conn.commit()
+        conn.close()
+
     
     def create_entry(self, entry: Entry) -> Entry:
         """
