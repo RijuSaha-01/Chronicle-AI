@@ -22,9 +22,6 @@ class EpisodeCoverGenerator:
     Orchestrates the analysis and generation of episode cover art.
     """
 
-    # Consistent style tokens for visual identity
-    STYLE_TOKENS = "cinematic film still, 35mm lens, f/1.8, highly detailed, masterwork, professional color grading, anamorphic widescreen"
-
     def __init__(self, image_gen: Optional[ImageGenerator] = None, base_data_dir: str = "data"):
         self.repo = get_repository()
         # Default to localhost ComfyUI if no client provided
@@ -76,7 +73,8 @@ class EpisodeCoverGenerator:
             width=1280,
             height=720,
             steps=preset.get("steps", 25),
-            sampler_name=preset.get("sampler")
+            sampler_name=preset.get("sampler"),
+            seed=preset.get("seed")
         )
 
         if not image_bytes:

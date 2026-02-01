@@ -4,6 +4,7 @@ Mood-to-Visual Prompt Converter for SD-optimized cover art prompts.
 """
 
 import logging
+import random
 from typing import Dict, List, Tuple, Optional
 from .models import Entry
 from .llm_utils import _make_request
@@ -64,6 +65,63 @@ class VisualStylePresets:
     @classmethod
     def get_preset(cls, name: str) -> Dict:
         return cls.PRESETS.get(name.lower(), cls.CINEMATIC)
+
+class VisualIdentity:
+    """
+    Ensures visual consistency across Chronicle covers.
+    Applies fixed style tokens, season-specific palettes, and signature motifs.
+    """
+    
+    # Season-specific color palettes
+    SEASON_PALETTES = {
+        1: "cool blues, deep indigo, silver accents, cold atmospheric grading",
+        2: "warm tones, amber, burnt orange, golden hour glow, sun-drenched palette",
+        3: "emerald greens, earthy browns, forest mist, mossy textures, organic grading",
+        4: "regal purples, crimson, gold filigree, high-contrast velvet tones",
+        5: "monochrome neutrals, stark whites, slate grays, minimalist sterile grading"
+    }
+    
+    # Signature motifs that appear subtly across covers
+    SIGNATURE_MOTIFS = [
+        "a faint glowing geometric crest in the corner",
+        "subtle crystalline particles floating in the air",
+        "a thin horizontal anamorphic lens flare",
+        "delicate golden thread woven into the background elements"
+    ]
+    
+    # Fixed consistency tokens
+    CONSISTENCY_TOKENS = "consistent character features, uniform composition frame, signature artistic touch, matching grain structure"
+
+    @classmethod
+    def get_season_palette(cls, season_number: Optional[int]) -> str:
+        if not season_number:
+            return "balanced natural colors, neutral grading"
+        # Wrap around if season number exceeds defined palettes
+        palette_idx = ((season_number - 1) % len(cls.SEASON_PALETTES)) + 1
+        return cls.SEASON_PALETTES.get(palette_idx, "balanced natural colors")
+
+    @classmethod
+    def get_signature_motif(cls, episode_id: Optional[int]) -> str:
+        if episode_id is None:
+            return random.choice(cls.SIGNATURE_MOTIFS)
+        return cls.SIGNATURE_MOTIFS[episode_id % len(cls.SIGNATURE_MOTIFS)]
+
+    @classmethod
+    def get_consistent_seed(cls, season_id: Optional[int], episode_id: Optional[int]) -> Optional[int]:
+        """Generate a consistent seed prefix/base for related episodes in a season."""
+        if season_id is None:
+            return None
+        # Base seed for the season + episode offset
+        return (season_id * 100000) + (episode_id or 0)
+
+    @classmethod
+    def apply_identity(cls, prompt: str, season_number: Optional[int] = None, episode_id: Optional[int] = None) -> str:
+        """Apply the visual identity layer to any prompt."""
+        palette = cls.get_season_palette(season_number)
+        motif = cls.get_signature_motif(episode_id)
+        
+        identity_layer = f"{palette}, {cls.CONSISTENCY_TOKENS}, {motif}"
+        return f"{prompt}, {identity_layer}"
 
 class MoodToVisualPrompt:
     """
@@ -232,8 +290,19 @@ Mood:"""
         
         positive_prompt = ", ".join([c for c in components if c])
         
-        # 5. Generate appropriate negative prompts
+        # 6. Apply Visual Identity Layer
+        positive_prompt = VisualIdentity.apply_identity(
+            positive_prompt, 
+            season_number=episode.season_id, 
+            episode_id=episode.id
+        )
+        
+        # 7. Generate appropriate negative prompts
         negative_prompt = f"low quality, blurry, distorted, {mood_data['negative']}, {preset['negative']}"
+        
+        # 8. Add seed and metadata
+        preset = preset.copy()
+        preset["seed"] = VisualIdentity.get_consistent_seed(episode.season_id, episode.id)
         
         return positive_prompt, negative_prompt, preset
 
