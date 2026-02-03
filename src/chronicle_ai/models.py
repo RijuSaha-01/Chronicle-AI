@@ -179,6 +179,7 @@ class Entry:
     recap_id: Optional[int] = None
     season_id: Optional[int] = None
     cover_art_path: Optional[str] = None
+    image_variants: dict = field(default_factory=dict)  # {"original": "path", "medium": "path", "small": "path", "square": "path", "blur": "base64"}
     
     def to_dict(self) -> dict:
         """Convert entry to dictionary for serialization."""
@@ -195,7 +196,8 @@ class Entry:
             "conflict_data": self.conflict_data.to_dict() if self.conflict_data else None,
             "recap_id": self.recap_id,
             "season_id": self.season_id,
-            "cover_art_path": self.cover_art_path
+            "cover_art_path": self.cover_art_path,
+            "image_variants": self.image_variants
         }
     
     @classmethod
@@ -214,7 +216,8 @@ class Entry:
             conflict_data=ConflictAnalysis.from_dict(data.get("conflict_data")) if data.get("conflict_data") else None,
             recap_id=data.get("recap_id"),
             season_id=data.get("season_id"),
-            cover_art_path=data.get("cover_art_path")
+            cover_art_path=data.get("cover_art_path"),
+            image_variants=data.get("image_variants", {})
         )
     
     def snippet(self, max_length: int = 100) -> str:

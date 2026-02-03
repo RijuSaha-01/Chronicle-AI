@@ -74,6 +74,8 @@ class EntryRepository:
                 cursor.execute("ALTER TABLE diary_entries ADD COLUMN keywords TEXT")
             if 'cover_art_path' not in columns:
                 cursor.execute("ALTER TABLE diary_entries ADD COLUMN cover_art_path TEXT")
+            if 'image_variants' not in columns:
+                cursor.execute("ALTER TABLE diary_entries ADD COLUMN image_variants TEXT")
             
             # Create recaps table if it doesn't exist
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='recaps'")
@@ -137,7 +139,8 @@ class EntryRepository:
                     conflict_data TEXT,
                     recap_id INTEGER,
                     season_id INTEGER,
-                    cover_art_path TEXT
+                    cover_art_path TEXT,
+                    image_variants TEXT
                 )
             """)
             cursor.execute("""
@@ -206,8 +209,8 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            """INSERT INTO diary_entries (date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path) 
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO diary_entries (date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path, image_variants) 
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 entry.date, 
                 entry.raw_text, 
@@ -220,7 +223,8 @@ class EntryRepository:
                 json.dumps(entry.conflict_data.to_dict()) if entry.conflict_data else None,
                 entry.recap_id,
                 entry.season_id,
-                entry.cover_art_path
+                entry.cover_art_path,
+                json.dumps(entry.image_variants) if entry.image_variants else None
             )
         )
         
@@ -248,7 +252,7 @@ class EntryRepository:
         
         cursor.execute(
             """UPDATE diary_entries 
-               SET date = ?, raw_text = ?, narrative_text = ?, title = ?, title_options = ?, logline = ?, synopsis = ?, keywords = ?, conflict_data = ?, recap_id = ?, season_id = ?, cover_art_path = ?
+               SET date = ?, raw_text = ?, narrative_text = ?, title = ?, title_options = ?, logline = ?, synopsis = ?, keywords = ?, conflict_data = ?, recap_id = ?, season_id = ?, cover_art_path = ?, image_variants = ?
                WHERE id = ?""",
             (
                 entry.date, 
@@ -263,6 +267,7 @@ class EntryRepository:
                 entry.recap_id,
                 entry.season_id,
                 entry.cover_art_path,
+                json.dumps(entry.image_variants) if entry.image_variants else None,
                 entry.id
             )
         )
@@ -286,7 +291,7 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            "SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path FROM diary_entries WHERE id = ?",
+            "SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path, image_variants FROM diary_entries WHERE id = ?",
             (entry_id,)
         )
         row = cursor.fetchone()
@@ -300,6 +305,8 @@ class EntryRepository:
                 data["title_options"] = json.loads(data["title_options"])
             if data.get("keywords"):
                 data["keywords"] = json.loads(data["keywords"])
+            if data.get("image_variants"):
+                data["image_variants"] = json.loads(data["image_variants"])
             return Entry.from_dict(data)
         return None
     
@@ -316,7 +323,7 @@ class EntryRepository:
         conn = self._get_connection()
         cursor = conn.cursor()
         
-        query = "SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path FROM diary_entries ORDER BY date DESC, id DESC"
+        query = "SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path, image_variants FROM diary_entries ORDER BY date DESC, id DESC"
         if limit:
             query += f" LIMIT {int(limit)}"
         
@@ -333,6 +340,8 @@ class EntryRepository:
                 data["title_options"] = json.loads(data["title_options"])
             if data.get("keywords"):
                 data["keywords"] = json.loads(data["keywords"])
+            if data.get("image_variants"):
+                data["image_variants"] = json.loads(data["image_variants"])
             entries.append(Entry.from_dict(data))
             
         return entries
@@ -364,7 +373,7 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            """SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path 
+            """SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path, image_variants 
                FROM diary_entries 
                WHERE date >= ? AND date <= ?
                ORDER BY date DESC, id DESC""",
@@ -382,6 +391,8 @@ class EntryRepository:
                 data["title_options"] = json.loads(data["title_options"])
             if data.get("keywords"):
                 data["keywords"] = json.loads(data["keywords"])
+            if data.get("image_variants"):
+                data["image_variants"] = json.loads(data["image_variants"])
             entries.append(Entry.from_dict(data))
             
         return entries

@@ -5,9 +5,17 @@ Analyzes episode metadata and generates cinematic 16:9 landscape covers.
 
 import os
 import logging
+import io
+import base64
 from pathlib import Path
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Dict
+
+try:
+    from PIL import Image
+    PILLOW_AVAILABLE = True
+except ImportError:
+    PILLOW_AVAILABLE = False
 
 from .models import Entry
 from .repository import get_repository
@@ -28,6 +36,63 @@ class EpisodeCoverGenerator:
         self.image_gen = image_gen or ImageGenerator(base_url="http://127.0.0.1:8188", backend="comfyui")
         self.conflict_detector = ConflictDetector()
         self.base_data_dir = base_data_dir
+
+    def process_image_variants(self, image_bytes: bytes, target_dir: Path) -> Dict[str, str]:
+        """
+        Process the primary image into multiple variants and generate a blur placeholder.
+        
+        Variants:
+        - Original: 1280x720 (webp)
+        - Medium: 640x360 (webp)
+        - Small: 320x180 (webp)
+        - Square: 400x400 (webp)
+        - Blur: Tiny base64
+        """
+        if not PILLOW_AVAILABLE:
+            logger.warning("Pillow not installed. Skipping thumbnail generation.")
+            return {}
+
+        try:
+            img = Image.open(io.BytesIO(image_bytes))
+            variants = {}
+            
+            # Define sizes: (name, width, height, is_square)
+            sizes = [
+                ("original", 1280, 720, False),
+                ("medium", 640, 360, False),
+                ("small", 320, 180, False),
+                ("square", 400, 400, True),
+            ]
+            
+            for name, w, h, is_square in sizes:
+                if is_square:
+                    # Center crop to square
+                    min_dim = min(img.width, img.height)
+                    left = (img.width - min_dim) / 2
+                    top = (img.height - min_dim) / 2
+                    right = (img.width + min_dim) / 2
+                    bottom = (img.height + min_dim) / 2
+                    variant_img = img.crop((left, top, right, bottom))
+                    variant_img = variant_img.resize((w, h), Image.Resampling.LANCZOS)
+                else:
+                    # Maintain aspect ratio for others (target is 16:9)
+                    variant_img = img.resize((w, h), Image.Resampling.LANCZOS)
+                
+                variant_path = target_dir / f"{name}.webp"
+                variant_img.save(variant_path, "WEBP", quality=85)
+                variants[name] = str(variant_path)
+                
+            # Generate blur placeholder (e.g., 20x11 for 16:9)
+            blur_img = img.resize((20, 11), Image.Resampling.BOX)
+            buffered = io.BytesIO()
+            blur_img.save(buffered, format="WEBP", quality=10)
+            blur_base64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
+            variants["blur"] = f"data:image/webp;base64,{blur_base64}"
+            
+            return variants
+        except Exception as e:
+            logger.error(f"Error processing image variants: {e}")
+            return {}
 
     def generate_cover(self, episode_id: int, regenerate: bool = False) -> Optional[str]:
         """
@@ -90,20 +155,24 @@ class EpisodeCoverGenerator:
             
         season = str(episode.season_id or "0")
         
-        # Ensure the directory exists in the current project root or specified base_data_dir
+        # Ensure the directory exists
         target_dir = Path(self.base_data_dir) / "images" / year / season / str(episode_id)
         target_dir.mkdir(parents=True, exist_ok=True)
         
-        file_path = target_dir / "cover.png"
+        # 4. Generate variants (including cover.webp and thumbnails)
+        variants = self.process_image_variants(image_bytes, target_dir)
         
+        # 5. Save the primary PNG for backward compatibility (optional, but good for now)
+        file_path = target_dir / "cover.png"
         with open(file_path, "wb") as f:
             f.write(image_bytes)
             
-        # 5. Link image path to episode in database
+        # 6. Link image path and variants to episode in database
         episode.cover_art_path = str(file_path)
+        episode.image_variants = variants
         self.repo.update_entry(episode)
         
-        logger.info(f"Successfully generated and linked cover art: {file_path}")
+        logger.info(f"Successfully generated and linked cover art and {len(variants)} variants.")
         return str(file_path)
 
 # Initialize a global instance
