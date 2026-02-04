@@ -345,4 +345,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 **Chronicle AI** – *Your Life, Your Story, Your Episodes* 🎬
-**Feedback**-*Open to FeedBacks*
+**Feedback**-*Open to FeedBacks and improvements*
