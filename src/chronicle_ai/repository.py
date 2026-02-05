@@ -102,7 +102,9 @@ class EntryRepository:
                         dominant_themes TEXT,
                         description TEXT,
                         mode TEXT DEFAULT 'default',
-                        arc_analysis TEXT
+                        arc_analysis TEXT,
+                        poster_path TEXT,
+                        poster_variants TEXT
                     )
                 """)
             else:
@@ -111,6 +113,10 @@ class EntryRepository:
                 season_columns = {row['name'] for row in cursor.fetchall()}
                 if 'arc_analysis' not in season_columns:
                     cursor.execute("ALTER TABLE seasons ADD COLUMN arc_analysis TEXT")
+                if 'poster_path' not in season_columns:
+                    cursor.execute("ALTER TABLE seasons ADD COLUMN poster_path TEXT")
+                if 'poster_variants' not in season_columns:
+                    cursor.execute("ALTER TABLE seasons ADD COLUMN poster_variants TEXT")
 
             # Create settings table if it doesn't exist
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='settings'")
@@ -522,8 +528,8 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            """INSERT INTO seasons (title, start_date, end_date, episode_count, dominant_themes, description, mode, arc_analysis) 
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO seasons (title, start_date, end_date, episode_count, dominant_themes, description, mode, arc_analysis, poster_path, poster_variants) 
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 season.title,
                 season.start_date,
@@ -532,7 +538,9 @@ class EntryRepository:
                 json.dumps(season.dominant_themes),
                 season.description,
                 season.mode,
-                json.dumps(season.arc_analysis.to_dict()) if season.arc_analysis else None
+                json.dumps(season.arc_analysis.to_dict()) if season.arc_analysis else None,
+                season.poster_path,
+                json.dumps(season.poster_variants) if season.poster_variants else None
             )
         )
         
@@ -552,7 +560,7 @@ class EntryRepository:
         
         cursor.execute(
             """UPDATE seasons 
-               SET title = ?, start_date = ?, end_date = ?, episode_count = ?, dominant_themes = ?, description = ?, mode = ?, arc_analysis = ?
+               SET title = ?, start_date = ?, end_date = ?, episode_count = ?, dominant_themes = ?, description = ?, mode = ?, arc_analysis = ?, poster_path = ?, poster_variants = ?
                WHERE id = ?""",
             (
                 season.title,
@@ -563,6 +571,8 @@ class EntryRepository:
                 season.description,
                 season.mode,
                 json.dumps(season.arc_analysis.to_dict()) if season.arc_analysis else None,
+                season.poster_path,
+                json.dumps(season.poster_variants) if season.poster_variants else None,
                 season.id
             )
         )
@@ -577,7 +587,7 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            "SELECT id, title, start_date, end_date, episode_count, dominant_themes, description, mode, arc_analysis FROM seasons WHERE id = ?",
+            "SELECT id, title, start_date, end_date, episode_count, dominant_themes, description, mode, arc_analysis, poster_path, poster_variants FROM seasons WHERE id = ?",
             (season_id,)
         )
         row = cursor.fetchone()
@@ -588,6 +598,8 @@ class EntryRepository:
             data["dominant_themes"] = json.loads(data["dominant_themes"]) if data.get("dominant_themes") else []
             if data.get("arc_analysis"):
                 data["arc_analysis"] = json.loads(data["arc_analysis"])
+            if data.get("poster_variants"):
+                data["poster_variants"] = json.loads(data["poster_variants"])
             return Season.from_dict(data)
         return None
 
@@ -597,7 +609,7 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            "SELECT id, title, start_date, end_date, episode_count, dominant_themes, description, mode, arc_analysis FROM seasons ORDER BY start_date DESC"
+            "SELECT id, title, start_date, end_date, episode_count, dominant_themes, description, mode, arc_analysis, poster_path, poster_variants FROM seasons ORDER BY start_date DESC"
         )
         rows = cursor.fetchall()
         conn.close()
@@ -608,6 +620,8 @@ class EntryRepository:
             data["dominant_themes"] = json.loads(data["dominant_themes"]) if data.get("dominant_themes") else []
             if data.get("arc_analysis"):
                 data["arc_analysis"] = json.loads(data["arc_analysis"])
+            if data.get("poster_variants"):
+                data["poster_variants"] = json.loads(data["poster_variants"])
             seasons.append(Season.from_dict(data))
             
         return seasons
@@ -618,7 +632,7 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            "SELECT id, title, start_date, end_date, episode_count, dominant_themes, description, mode, arc_analysis FROM seasons WHERE start_date <= ? AND end_date >= ?",
+            "SELECT id, title, start_date, end_date, episode_count, dominant_themes, description, mode, arc_analysis, poster_path, poster_variants FROM seasons WHERE start_date <= ? AND end_date >= ?",
             (target_date, target_date)
         )
         row = cursor.fetchone()
@@ -629,6 +643,8 @@ class EntryRepository:
             data["dominant_themes"] = json.loads(data["dominant_themes"]) if data.get("dominant_themes") else []
             if data.get("arc_analysis"):
                 data["arc_analysis"] = json.loads(data["arc_analysis"])
+            if data.get("poster_variants"):
+                data["poster_variants"] = json.loads(data["poster_variants"])
             return Season.from_dict(data)
         return None
     

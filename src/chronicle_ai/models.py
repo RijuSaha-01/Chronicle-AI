@@ -60,6 +60,8 @@ class Season:
     description: str = ""
     mode: str = "default"  # default, smart, manual
     arc_analysis: Optional[SeasonArc] = None
+    poster_path: Optional[str] = None
+    poster_variants: dict = field(default_factory=dict)  # {"dramatic": "path", "minimalist": "path", "artistic": "path"}
 
     def to_dict(self) -> dict:
         return {
@@ -71,7 +73,9 @@ class Season:
             "dominant_themes": self.dominant_themes,
             "description": self.description,
             "mode": self.mode,
-            "arc_analysis": self.arc_analysis.to_dict() if self.arc_analysis else None
+            "arc_analysis": self.arc_analysis.to_dict() if self.arc_analysis else None,
+            "poster_path": self.poster_path,
+            "poster_variants": self.poster_variants
         }
 
     @classmethod
@@ -87,7 +91,9 @@ class Season:
             dominant_themes=data.get("dominant_themes", []),
             description=data.get("description", ""),
             mode=data.get("mode", "default"),
-            arc_analysis=SeasonArc.from_dict(data.get("arc_analysis")) if data.get("arc_analysis") else None
+            arc_analysis=SeasonArc.from_dict(data.get("arc_analysis")) if data.get("arc_analysis") else None,
+            poster_path=data.get("poster_path"),
+            poster_variants=data.get("poster_variants", {})
         )
 
 

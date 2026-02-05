@@ -20,6 +20,17 @@ conflict_detector = ConflictDetector()
 
 # Redundant functions removed as they are now in llm_utils
 
+class LLMClient:
+    """Wrapper for LLM requests to provide a consistent interface."""
+    def generate(self, prompt: str, system_prompt: Optional[str] = None) -> str:
+        full_prompt = prompt
+        if system_prompt:
+            full_prompt = f"{system_prompt}\n\n{prompt}"
+        return _make_request(full_prompt) or ""
+
+def get_llm_client():
+    return LLMClient()
+
 
 def detect_mood(raw_text: str) -> str:
     """Detect mood from raw diary text."""

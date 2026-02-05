@@ -16,6 +16,7 @@ from .exports import export_entry_to_markdown, export_weekly, export_daily
 from .season_manager import SeasonManager
 from .director import director_engine
 from .cover_gen import cover_generator
+from .poster_gen import poster_generator
 
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn
@@ -415,6 +416,43 @@ def cmd_generate_cover(args):
     else:
         console.print("[bold red]❌ Failed to generate cover art.[/bold red]")
         console.print("[yellow]Tip: Ensure your Stable Diffusion backend (ComfyUI) is running at http://127.0.0.1:8188[/yellow]")
+
+
+def cmd_generate_poster(args):
+    """Handle the 'generate-poster' command."""
+    from rich.console import Console
+    console = Console()
+    repo = get_repository()
+    
+    regenerate = getattr(args, "regenerate", False)
+    variants = ["dramatic", "minimalist", "artistic"]
+    
+    if args.season:
+        # Generate for a specific season
+        season_ids = [args.season]
+    else:
+        # Generate for all existing seasons
+        seasons = repo.list_seasons()
+        season_ids = [s.id for s in seasons]
+        console.print(f"[cyan]🎬 Found {len(season_ids)} existing seasons. Generating posters...[/cyan]")
+
+    for season_id in season_ids:
+        season = repo.get_season_by_id(season_id)
+        if not season:
+            console.print(f"[red]❌ Season {season_id} not found.[/red]")
+            continue
+            
+        console.print(f"\n[bold cyan]🖼️  Generating Season Posters for: {season.title} (ID: {season_id})[/bold cyan]")
+        
+        for variant in variants:
+            console.print(f"🎨 Variant: [bold]{variant}[/bold]...")
+            path = poster_generator.generate_poster(season_id, variant=variant, regenerate=regenerate)
+            if path:
+                console.print(f"   [green]✅ Saved to: {path}[/green]")
+            else:
+                console.print(f"   [red]❌ Failed to generate {variant} poster.[/red]")
+
+    console.print(f"\n[bold green]✅ Poster generation complete![/bold green]")
 
 
 def cmd_batch_synopsis(args):
@@ -830,6 +868,11 @@ Examples:
     cover_parser.add_argument("--episode", type=int, required=True, help="Episode ID to generate art for")
     cover_parser.add_argument("--regenerate", action="store_true", help="Force regeneration if cover already exists")
     
+    # Generate poster command
+    poster_parser = subparsers.add_parser("generate-poster", help="Generate 2:3 movie posters for a season")
+    poster_parser.add_argument("--season", type=int, help="Season ID to generate posters for (default: all seasons)")
+    poster_parser.add_argument("--regenerate", action="store_true", help="Force regeneration of existing posters")
+    
     return parser
 
 
@@ -859,6 +902,7 @@ def main():
         "benchmark": cmd_benchmark,
         "visual-prompt": cmd_visual_prompt,
         "generate-cover": cmd_generate_cover,
+        "generate-poster": cmd_generate_poster,
         "config": cmd_config,
     }
     
