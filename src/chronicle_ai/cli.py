@@ -399,23 +399,101 @@ def cmd_visual_prompt(args):
     print("\n" + "=" * 60)
             
             
-def cmd_generate_cover(args):
-    """Handle the 'generate-cover' command."""
+def cmd_regen_cover(args):
+    """Handle the 'regen-cover' command."""
     from rich.console import Console
     console = Console()
+    repo = get_repository()
+    
+    style = getattr(args, "style", None)
+    variations = getattr(args, "variations", 1)
+    prompt_override = getattr(args, "prompt", None)
+    
+    episode_ids = []
+    if getattr(args, "season", None):
+        season = repo.get_season_by_id(args.season)
+        if not season:
+            console.print(f"[bold red]❌ Season {args.season} not found.[/bold red]")
+            return
+        entries = repo.list_entries_between_dates(season.start_date, season.end_date)
+        episode_ids = [e.id for e in entries if e.season_id == args.season]
+        console.print(f"[cyan]🎬 Found {len(episode_ids)} episodes in Season {args.season}. Regenerating covers...[/cyan]")
+    elif getattr(args, "episode", None):
+        episode_ids = [args.episode]
+    else:
+        console.print("[bold red]❌ Either --episode or --season is required.[/bold red]")
+        return
+
+    for ep_id in episode_ids:
+        console.print(f"\n[bold cyan]🎨 Regenerating Cover for Episode {ep_id}[/bold cyan]")
+        if style: console.print(f"   🎭 Style: {style}")
+        if variations > 1: console.print(f"   🔢 Variations: {variations}")
+        if prompt_override: console.print(f"   ✍️  Prompt: {prompt_override}")
+        
+        paths = cover_generator.generate_cover(
+            ep_id, 
+            regenerate=True, 
+            style_name=style, 
+            prompt_override=prompt_override,
+            variations=variations
+        )
+        
+        if paths:
+            console.print(f"   [bold green]✅ Success![/bold green] Generated {len(paths)} variants.")
+            for p in paths:
+                console.print(f"      📍 {p}")
+        else:
+            console.print(f"   [bold red]❌ Failed for episode {ep_id}[/bold red]")
+
+def cmd_covers(args):
+    """Handle the 'covers' command - view history and select."""
+    from rich.console import Console
+    from rich.table import Table
+    console = Console()
+    repo = get_repository()
     
     episode_id = args.episode
-    regenerate = getattr(args, "regenerate", False)
+    episode = repo.get_entry_by_id(episode_id)
     
-    console.print(f"[bold cyan]🎨 Generating Episode Cover Art for ID: {episode_id}[/bold cyan]")
-    
-    path = cover_generator.generate_cover(episode_id, regenerate=regenerate)
-    
-    if path:
-        console.print(f"[bold green]✅ Success![/bold green] Cover art saved to: [white]{path}[/white]")
-    else:
-        console.print("[bold red]❌ Failed to generate cover art.[/bold red]")
-        console.print("[yellow]Tip: Ensure your Stable Diffusion backend (ComfyUI) is running at http://127.0.0.1:8188[/yellow]")
+    if not episode:
+        console.print(f"[bold red]❌ Episode {episode_id} not found.[/bold red]")
+        return
+
+    if args.history:
+        if not episode.cover_history:
+            console.print(f"[yellow]📭 No cover history for Episode {episode_id}.[/yellow]")
+        else:
+            console.print(f"\n[bold cyan]🖼️  Cover History for Episode {episode_id}: {episode.display_title()}[/bold cyan]")
+            
+            table = Table(show_header=True, header_style="bold magenta")
+            table.add_column("Idx", style="dim", width=4)
+            table.add_column("Date", width=20)
+            table.add_column("Style", width=12)
+            table.add_column("Prompt Snippet")
+            
+            # Show current first (not in history list usually, or at top)
+            table.add_row("ACT", "CURRENT", repo.get_setting("visual_style", "cinematic"), episode.image_variants.get("prompt", "N/A")[:50] + "...")
+            
+            for i, h in enumerate(episode.cover_history):
+                prompt = h.get("prompt", "N/A")
+                if len(prompt) > 50: prompt = prompt[:47] + "..."
+                table.add_row(str(i), h.get("date", "N/A"), h.get("style", "N/A"), prompt)
+            
+            console.print(table)
+            
+            console.print("\n[dim]To select a version: chronicle covers --episode ID --select INDEX[/dim]")
+
+    if args.select is not None:
+        idx = args.select
+        console.print(f"🔄 Selecting cover variant {idx} for Episode {episode_id}...")
+        if cover_generator.select_cover(episode_id, idx):
+            console.print("[bold green]✅ Cover updated successfully![/bold green]")
+        else:
+            console.print(f"[bold red]❌ Failed to select variant {idx}. Check index.[/bold red]")
+
+def cmd_generate_cover(args):
+    """Bridge to regen-cover for backward compatibility or direct use."""
+    cmd_regen_cover(args)
 
 
 def cmd_generate_poster(args):
@@ -863,10 +941,28 @@ Examples:
     # Benchmark command
     subparsers.add_parser("benchmark", help="Run full pipeline benchmark and report stats")
     
-    # Generate cover command
+    # Generate cover command (leaving for backward compatibility)
     cover_parser = subparsers.add_parser("generate-cover", help="Generate cinematic cover art for an episode")
     cover_parser.add_argument("--episode", type=int, required=True, help="Episode ID to generate art for")
     cover_parser.add_argument("--regenerate", action="store_true", help="Force regeneration if cover already exists")
+    cover_parser.add_argument("--style", type=str, help="Style preset to use")
+    cover_parser.add_argument("--variations", type=int, default=1, help="Number of variations to generate")
+    cover_parser.add_argument("--prompt", type=str, help="Custom prompt override")
+    cover_parser.add_argument("--season", type=int, help="Regenerate all covers for a season")
+
+    # Regen-cover command
+    regen_cover_parser = subparsers.add_parser("regen-cover", help="Regenerate cover art with variations and style")
+    regen_cover_parser.add_argument("--episode", type=int, help="Episode ID to regenerate")
+    regen_cover_parser.add_argument("--style", type=str, help="Style preset to use")
+    regen_cover_parser.add_argument("--variations", type=int, default=1, help="Number of variations")
+    regen_cover_parser.add_argument("--prompt", type=str, help="Custom prompt override")
+    regen_cover_parser.add_argument("--season", type=int, help="Regenerate all covers for a season")
+
+    # Covers command
+    covers_parser = subparsers.add_parser("covers", help="View cover history and select variants")
+    covers_parser.add_argument("--episode", type=int, required=True, help="Episode ID")
+    covers_parser.add_argument("--history", action="store_true", help="Show cover history")
+    covers_parser.add_argument("--select", type=int, help="Select a cover from history by index")
     
     # Generate poster command
     poster_parser = subparsers.add_parser("generate-poster", help="Generate 2:3 movie posters for a season")
@@ -902,6 +998,8 @@ def main():
         "benchmark": cmd_benchmark,
         "visual-prompt": cmd_visual_prompt,
         "generate-cover": cmd_generate_cover,
+        "regen-cover": cmd_regen_cover,
+        "covers": cmd_covers,
         "generate-poster": cmd_generate_poster,
         "config": cmd_config,
     }

@@ -11,6 +11,42 @@ import json
 
 
 @dataclass
+class CoverMetadata:
+    """
+    Metadata about a generated cover image.
+    """
+    path: str
+    prompt: str
+    style: str
+    date: str
+    settings: dict = field(default_factory=dict)
+    variants: dict = field(default_factory=dict)
+
+    def to_dict(self) -> dict:
+        return {
+            "path": self.path,
+            "prompt": self.prompt,
+            "style": self.style,
+            "date": self.date,
+            "settings": self.settings,
+            "variants": self.variants
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "CoverMetadata":
+        if not data:
+            return None
+        return cls(
+            path=data.get("path", ""),
+            prompt=data.get("prompt", ""),
+            style=data.get("style", ""),
+            date=data.get("date", ""),
+            settings=data.get("settings", {}),
+            variants=data.get("variants", {})
+        )
+
+
+@dataclass
 class SeasonArc:
     """
     Detailed narrative analysis of a season's arc.
@@ -186,6 +222,7 @@ class Entry:
     season_id: Optional[int] = None
     cover_art_path: Optional[str] = None
     image_variants: dict = field(default_factory=dict)  # {"original": "path", "medium": "path", "small": "path", "square": "path", "blur": "base64"}
+    cover_history: List[dict] = field(default_factory=list)  # List of CoverMetadata dicts
     
     def to_dict(self) -> dict:
         """Convert entry to dictionary for serialization."""
@@ -203,7 +240,8 @@ class Entry:
             "recap_id": self.recap_id,
             "season_id": self.season_id,
             "cover_art_path": self.cover_art_path,
-            "image_variants": self.image_variants
+            "image_variants": self.image_variants,
+            "cover_history": self.cover_history
         }
     
     @classmethod
@@ -223,7 +261,8 @@ class Entry:
             recap_id=data.get("recap_id"),
             season_id=data.get("season_id"),
             cover_art_path=data.get("cover_art_path"),
-            image_variants=data.get("image_variants", {})
+            image_variants=data.get("image_variants", {}),
+            cover_history=data.get("cover_history", [])
         )
     
     def snippet(self, max_length: int = 100) -> str:
