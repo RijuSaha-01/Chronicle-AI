@@ -850,6 +850,41 @@ def cmd_benchmark(args):
     console.print("\n[bold cyan]Done![/bold cyan]")
 
 
+def cmd_storage(args):
+    """Handle the 'storage' command."""
+    from .storage import storage_manager
+    from rich.console import Console
+    console = Console()
+    
+    if args.images:
+        usage = storage_manager.get_storage_usage()
+        console.print(f"\n[bold cyan]🖼️  Image Storage Usage[/bold cyan]")
+        console.print(f"   📍 Base Path: [dim]{usage['base_path']}[/dim]")
+        console.print(f"   📂 File Count: {usage['file_count']}")
+        console.print(f"   💾 Total Size: [bold green]{usage['total_size_mb']} MB[/bold green]")
+        
+    elif args.cleanup:
+        console.print("[yellow]🔍 Searching for orphaned images...[/yellow]")
+        deleted = storage_manager.cleanup_orphaned_images()
+        if deleted:
+            console.print(f"[bold green]✅ Cleaned up {len(deleted)} orphaned directories:[/bold green]")
+            for p in deleted:
+                console.print(f"   🗑️  {p}")
+        else:
+            console.print("[green]✅ No orphaned images found.[/green]")
+            
+    elif args.backup:
+        console.print("[cyan]📦 Creating image backup...[/cyan]")
+        path = storage_manager.backup_images(args.export_path)
+        console.print(f"[bold green]✅ Backup complete! Saved to: {path}[/bold green]")
+    else:
+        # Default to usage
+        usage = storage_manager.get_storage_usage()
+        console.print(f"\n[bold cyan]🖼️  Image Storage Overview[/bold cyan]")
+        console.print(f"   📂 Files: {usage['file_count']}")
+        console.print(f"   💾 Size: {usage['total_size_mb']} MB")
+
+
 def create_parser() -> argparse.ArgumentParser:
     """Create and configure the argument parser."""
     parser = argparse.ArgumentParser(
@@ -969,6 +1004,13 @@ Examples:
     poster_parser.add_argument("--season", type=int, help="Season ID to generate posters for (default: all seasons)")
     poster_parser.add_argument("--regenerate", action="store_true", help="Force regeneration of existing posters")
     
+    # Storage command
+    storage_parser = subparsers.add_parser("storage", help="Manage image storage and usage")
+    storage_parser.add_argument("--images", action="store_true", help="Show image storage usage")
+    storage_parser.add_argument("--cleanup", action="store_true", help="Remove orphaned images")
+    storage_parser.add_argument("--backup", action="store_true", help="Backup all images and metadata")
+    storage_parser.add_argument("--export-path", type=str, help="Path for backup export")
+    
     return parser
 
 
@@ -1002,6 +1044,7 @@ def main():
         "covers": cmd_covers,
         "generate-poster": cmd_generate_poster,
         "config": cmd_config,
+        "storage": cmd_storage,
     }
     
     handler = commands.get(args.command)

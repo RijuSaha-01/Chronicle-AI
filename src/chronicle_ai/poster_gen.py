@@ -20,6 +20,7 @@ from .models import Season, SeasonArc
 from .repository import get_repository
 from .arc_analyzer import SeasonArcAnalyzer
 from .image_client import ImageGenerator
+from .storage import storage_manager
 
 logger = logging.getLogger(__name__)
 
@@ -84,28 +85,27 @@ class SeasonPosterGenerator:
             logger.error(f"Failed to generate poster bytes for season {season_id}")
             return None
 
-        # 4. Save to: /data/images/seasons/{season_id}/poster_{variant}.png
-        target_dir = Path(self.base_data_dir) / "images" / "seasons" / str(season_id)
-        target_dir.mkdir(parents=True, exist_ok=True)
-        
-        file_path = target_dir / f"poster_{variant}.png"
-        with open(file_path, "wb") as f:
-            f.write(image_bytes)
+        # 4. Save using ImageStorageManager
+        try:
+            poster_path = storage_manager.save_season_poster(season_id, image_bytes, pos_prompt)
             
-        # 5. Update season metadata
-        if not season.poster_variants:
-            season.poster_variants = {}
-        
-        season.poster_variants[variant] = str(file_path)
-        
-        # Set primary path to the dramatic one or the first one generated
-        if variant == "dramatic" or not season.poster_path:
-            season.poster_path = str(file_path)
+            # 5. Update season metadata (variants support)
+            if not season.poster_variants:
+                season.poster_variants = {}
             
-        self.repo.update_season(season)
-        
-        logger.info(f"Successfully generated and linked {variant} poster for season {season_id}.")
-        return str(file_path)
+            season.poster_variants[variant] = poster_path
+            
+            # Set primary path to the dramatic one or the first one generated
+            if variant == "dramatic" or not season.poster_path:
+                season.poster_path = poster_path
+                
+            self.repo.update_season(season)
+            
+            logger.info(f"Successfully generated and linked {variant} poster for season {season_id}.")
+            return poster_path
+        except Exception as e:
+            logger.error(f"Error saving season poster: {e}")
+            return None
 
     def _build_poster_prompt(self, season: Season, variant: str) -> (str, str):
         """Constructs artistic prompts based on season analysis and style variant."""
