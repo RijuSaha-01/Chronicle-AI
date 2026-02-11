@@ -54,6 +54,11 @@ class EntryResponse(BaseModel):
     synopsis: Optional[str] = None
     keywords: List[str] = []
     conflict_data: Optional[dict] = None
+    season_id: Optional[int] = None
+    cover_art_path: Optional[str] = None
+    image_variants: dict = {}
+    mood: Optional[str] = None
+    style: Optional[str] = None
     
     class Config:
         from_attributes = True
@@ -369,6 +374,84 @@ async def export_entry(entry_id: int):
         success=True,
         filepath=filepath,
         message="Entry exported successfully"
+    )
+
+
+@app.get("/gallery", response_model=EntryListResponse)
+async def get_gallery(
+    season: Optional[int] = Query(None, description="Filter by season ID"),
+    mood: Optional[str] = Query(None, description="Filter by mood"),
+    style: Optional[str] = Query(None, description="Filter by style"),
+    start_date: Optional[str] = Query(None, description="Filter: start date"),
+    end_date: Optional[str] = Query(None, description="Filter: end date"),
+    sort_by: str = Query("date", description="Sort by: date, mood, generation_date"),
+    limit: int = Query(50, ge=1, le=100)
+):
+    """
+    Get image gallery with filters and sorting.
+    """
+    repo = get_repository()
+    entries = repo.search_gallery(
+        season_id=season,
+        mood=mood,
+        style=style,
+        start_date=start_date,
+        end_date=end_date,
+        sort_by=sort_by,
+        limit=limit
+    )
+    
+    return EntryListResponse(
+        entries=[
+            EntryResponse(
+                id=e.id,
+                date=e.date,
+                raw_text=e.raw_text,
+                narrative_text=e.narrative_text,
+                title=e.title,
+                logline=e.logline,
+                synopsis=e.synopsis,
+                keywords=e.keywords,
+                season_id=e.season_id,
+                cover_art_path=e.cover_art_path,
+                image_variants=e.image_variants,
+                mood=e.mood,
+                style=e.style
+            )
+            for e in entries
+        ],
+        total=len(entries)
+    )
+
+
+@app.get("/gallery/{season_id}", response_model=EntryListResponse)
+async def get_season_gallery(season_id: int, limit: int = 50):
+    """
+    Get image gallery for a specific season.
+    """
+    repo = get_repository()
+    entries = repo.search_gallery(season_id=season_id, limit=limit)
+    
+    return EntryListResponse(
+        entries=[
+            EntryResponse(
+                id=e.id,
+                date=e.date,
+                raw_text=e.raw_text,
+                narrative_text=e.narrative_text,
+                title=e.title,
+                logline=e.logline,
+                synopsis=e.synopsis,
+                keywords=e.keywords,
+                season_id=e.season_id,
+                cover_art_path=e.cover_art_path,
+                image_variants=e.image_variants,
+                mood=e.mood,
+                style=e.style
+            )
+            for e in entries
+        ],
+        total=len(entries)
     )
 
 

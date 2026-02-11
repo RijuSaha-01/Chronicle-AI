@@ -240,22 +240,336 @@ def export_weekly(
     return str(filepath)
 
 
-def export_all_entries(output_dir: Optional[str] = None) -> List[str]:
-    """
-    Export all entries to individual daily Markdown files.
-    
-    Args:
-        output_dir: Optional custom output directory
-        
-    Returns:
-        List of paths to created files
-    """
-    repo = get_repository()
-    entries = repo.list_entries()
-    
-    created_files = []
-    for entry in entries:
-        filepath = export_entry_to_markdown(entry, output_dir)
-        created_files.append(filepath)
-    
     return created_files
+
+
+def export_gallery_html(entries: List[Entry], output_path: str = "gallery.html", title: str = "Chronicle Gallery") -> str:
+    """
+    Export a list of entries with images to a standalone HTML gallery.
+    """
+    # Group by season if multiple seasons
+    seasons_data = {}
+    repo = get_repository()
+    
+    for entry in entries:
+        s_id = entry.season_id or 0
+        if s_id not in seasons_data:
+            season = repo.get_season_by_id(s_id) if s_id > 0 else None
+            seasons_data[s_id] = {
+                "title": season.title if season else "Miscellaneous",
+                "entries": []
+            }
+        seasons_data[s_id]["entries"].append(entry)
+
+    # Sort seasons by id
+    sorted_seasons = sorted(seasons_data.items())
+
+    # Build gallery items
+    gallery_html = ""
+    for s_id, s_info in sorted_seasons:
+        gallery_html += f"<section class='season-section'><h2>{s_info['title']}</h2><div class='grid'>"
+        for entry in s_info["entries"]:
+            img_path = entry.cover_art_path or ""
+            # Handle absolute paths for local viewing if needed (might need adjustment depending on deployment)
+            # For now assume paths are relative to some base or just use absolute for local
+            abs_img_path = str(Path(img_path).absolute()) if img_path else ""
+            
+            title_text = entry.title or f"Episode {entry.id}"
+            mood_tag = f"<span class='tag mood'>{entry.mood}</span>" if entry.mood else ""
+            style_tag = f"<span class='tag style'>{entry.style}</span>" if entry.style else ""
+            
+            gallery_html += f"""
+            <div class='card' onclick='showModal({entry.id})'>
+                <div class='card-img' style='background-image: url("file:///{abs_img_path.replace("\\", "/")}")'>
+                    <div class='overlay'>
+                        <span class='date'>{entry.date}</span>
+                    </div>
+                </div>
+                <div class='card-content'>
+                    <h3>{title_text}</h3>
+                    <div class='tags'>{mood_tag}{style_tag}</div>
+                </div>
+                <script id='data-{entry.id}' type='application/json'>
+                {json.dumps({
+                    "title": title_text,
+                    "date": entry.date,
+                    "narrative": entry.narrative_text,
+                    "logline": entry.logline,
+                    "mood": entry.mood,
+                    "style": entry.style,
+                    "img": "file:///" + abs_img_path.replace("\\", "/")
+                })}
+                </script>
+            </div>
+            """
+        gallery_html += "</div></section>"
+
+    full_html = GALLERY_HTML_TEMPLATE.replace("{{TITLE}}", title).replace("{{CONTENT}}", gallery_html)
+    
+    Path(output_path).write_text(full_html, encoding="utf-8")
+    return output_path
+
+
+GALLERY_HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{TITLE}} | Chronicle AI</title>
+    <style>
+        :root {
+            --bg: #0a0a0c;
+            --card-bg: #16161a;
+            --text: #e1e1e6;
+            --text-dim: #a0a0b0;
+            --accent: #7c4dff;
+            --accent-glow: rgba(124, 77, 255, 0.3);
+            --mood-bg: rgba(255, 255, 255, 0.1);
+            --style-bg: rgba(124, 77, 255, 0.2);
+        }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            line-height: 1.6;
+            padding: 2rem;
+            min-height: 100vh;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 4rem;
+        }
+
+        h1 {
+            font-size: 3rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #fff 0%, var(--accent) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            color: var(--text-dim);
+            font-size: 1.1rem;
+            letter-spacing: 0.1rem;
+            text-transform: uppercase;
+        }
+
+        .season-section {
+            margin-bottom: 4rem;
+        }
+
+        h2 {
+            font-size: 1.8rem;
+            margin-bottom: 2rem;
+            border-left: 4px solid var(--accent);
+            padding-left: 1rem;
+            color: var(--text);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 2rem;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            overflow: hidden;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            position: relative;
+        }
+
+        .card:hover {
+            transform: translateY(-8px);
+            border-color: var(--accent);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5), 0 0 15px var(--accent-glow);
+        }
+
+        .card-img {
+            height: 200px;
+            background-size: cover;
+            background-position: center;
+            position: relative;
+        }
+
+        .overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.4), transparent 40%, rgba(0,0,0,0.8));
+            display: flex;
+            align-items: flex-end;
+            padding: 1rem;
+        }
+
+        .date {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #fff;
+            background: rgba(0,0,0,0.5);
+            padding: 2px 8px;
+            border-radius: 4px;
+            backdrop-filter: blur(4px);
+        }
+
+        .card-content {
+            padding: 1.5rem;
+        }
+
+        h3 {
+            font-size: 1.25rem;
+            margin-bottom: 1rem;
+            color: #fff;
+        }
+
+        .tags {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .tag {
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            padding: 4px 10px;
+            border-radius: 20px;
+            letter-spacing: 0.05rem;
+        }
+
+        .tag.mood { background: var(--mood-bg); color: var(--text); }
+        .tag.style { background: var(--style-bg); color: var(--accent); }
+
+        /* Modal */
+        #modal {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+            padding: 2rem;
+        }
+
+        .modal-content {
+            background: var(--card-bg);
+            max-width: 1000px;
+            width: 100%;
+            border-radius: 20px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        @media (min-width: 800px) {
+            .modal-content { flex-direction: row; }
+            .modal-img { width: 60%; }
+            .modal-info { width: 40%; }
+        }
+
+        .modal-img {
+            background-size: cover;
+            background-position: center;
+            min-height: 300px;
+        }
+
+        .modal-info {
+            padding: 2.5rem;
+            overflow-y: auto;
+            max-height: 80vh;
+        }
+
+        .modal-info h2 {
+            border: none;
+            padding: 0;
+            margin-bottom: 0.5rem;
+            font-size: 2rem;
+        }
+
+        .modal-date {
+            color: var(--accent);
+            font-weight: 600;
+            margin-bottom: 2rem;
+            display: block;
+        }
+
+        .modal-narrative {
+            font-size: 1.1rem;
+            color: var(--text-dim);
+            margin-bottom: 2rem;
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 2rem; right: 2rem;
+            background: none; border: none;
+            color: #fff; font-size: 2rem;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Cinema Gallery</h1>
+        <p class="subtitle">A visual chronicle of your life story</p>
+    </header>
+
+    <main>
+        {{CONTENT}}
+    </main>
+
+    <div id="modal" onclick="if(event.target==this) hideModal()">
+        <button class="close-btn" onclick="hideModal()">&times;</button>
+        <div class="modal-content">
+            <div class="modal-img" id="modal-img"></div>
+            <div class="modal-info">
+                <span class="modal-date" id="modal-date"></span>
+                <h2 id="modal-title"></h2>
+                <p id="modal-logline" style="font-style: italic; margin-bottom: 1.5rem; color: var(--accent)"></p>
+                <div class="modal-narrative" id="modal-narrative"></div>
+                <div class="tags" id="modal-tags"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function showModal(id) {
+            const data = JSON.parse(document.getElementById('data-' + id).textContent);
+            document.getElementById('modal-title').textContent = data.title;
+            document.getElementById('modal-date').textContent = data.date;
+            document.getElementById('modal-logline').textContent = data.logline || '';
+            document.getElementById('modal-narrative').textContent = data.narrative || '';
+            document.getElementById('modal-img').style.backgroundImage = `url("${data.img}")`;
+            
+            const tags = document.getElementById('modal-tags');
+            tags.innerHTML = '';
+            if (data.mood) tags.innerHTML += `<span class='tag mood'>${data.mood}</span>`;
+            if (data.style) tags.innerHTML += `<span class='tag style'>${data.style}</span>`;
+            
+            document.getElementById('modal').style.display = 'flex';
+        }
+
+        function hideModal() {
+            document.getElementById('modal').style.display = 'none';
+        }
+
+        window.onclick = function(event) {
+            if (event.target == document.getElementById('modal')) {
+                hideModal();
+            }
+        }
+    </script>
+</body>
+</html>
+"""

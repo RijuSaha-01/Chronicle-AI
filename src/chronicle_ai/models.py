@@ -223,6 +223,8 @@ class Entry:
     cover_art_path: Optional[str] = None
     image_variants: dict = field(default_factory=dict)  # {"original": "path", "medium": "path", "small": "path", "square": "path", "blur": "base64"}
     cover_history: List[dict] = field(default_factory=list)  # List of CoverMetadata dicts
+    mood: Optional[str] = None
+    style: Optional[str] = None
     
     def to_dict(self) -> dict:
         """Convert entry to dictionary for serialization."""
@@ -241,7 +243,9 @@ class Entry:
             "season_id": self.season_id,
             "cover_art_path": self.cover_art_path,
             "image_variants": self.image_variants,
-            "cover_history": self.cover_history
+            "cover_history": self.cover_history,
+            "mood": self.mood,
+            "style": self.style
         }
     
     @classmethod
@@ -262,7 +266,9 @@ class Entry:
             season_id=data.get("season_id"),
             cover_art_path=data.get("cover_art_path"),
             image_variants=data.get("image_variants", {}),
-            cover_history=data.get("cover_history", [])
+            cover_history=data.get("cover_history", []),
+            mood=data.get("mood"),
+            style=data.get("style")
         )
     
     def snippet(self, max_length: int = 100) -> str:

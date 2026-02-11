@@ -121,6 +121,13 @@ class EpisodeCoverGenerator:
 
         # 2. Use MoodToVisualPrompt to create the prompt
         style = style_name or self.repo.get_setting("visual_style", "cinematic")
+        
+        # Detect mood if not already present or if regenerating
+        if not episode.mood or regenerate:
+            episode.mood = mood_to_visual._detect_detailed_mood(episode.narrative_text or episode.raw_text)
+        
+        episode.style = style
+        
         pos_prompt, neg_prompt, preset = mood_to_visual.generate_cover_prompt(episode, style_name=style)
         
         if prompt_override:

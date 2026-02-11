@@ -776,6 +776,59 @@ def cmd_config(args):
         print("=" * 40)
 
 
+def cmd_gallery(args):
+    """Handle the 'gallery' command - view or export image gallery."""
+    repo = get_repository()
+    console = Console()
+    
+    # Search for entries with images
+    entries = repo.search_gallery(
+        season_id=args.season,
+        mood=args.mood,
+        style=args.style,
+        start_date=args.start,
+        end_date=args.end,
+        sort_by=args.sort,
+        limit=args.limit or 50
+    )
+    
+    if not entries:
+        console.print("[yellow]📭 No images found matching the filters.[/yellow]")
+        return
+
+    if args.export:
+        from .exports import export_gallery_html
+        console.print(f"🎨 Exporting gallery to [bold]{args.export}[/bold]...")
+        filepath = export_gallery_html(entries, output_path=args.export)
+        console.print(f"✅ Gallery exported successfully to: [green]{filepath}[/green]")
+        return
+
+    # CLI View
+    console.print(f"\n[bold cyan]🖼️  Chronicle Image Gallery ({len(entries)} items)[/bold cyan]")
+    console.print("=" * 80)
+    
+    from rich.table import Table
+    table = Table(show_header=True, header_style="bold magenta")
+    table.add_column("Date", width=12)
+    table.add_column("Title", width=30)
+    table.add_column("Mood", width=12)
+    table.add_column("Style", width=12)
+    table.add_column("Image Path")
+    
+    for e in entries:
+        table.add_row(
+            e.date,
+            e.title or "Untitled",
+            e.mood or "N/A",
+            e.style or "N/A",
+            e.cover_art_path or "N/A"
+        )
+    
+    console.print(table)
+    console.print("\n[dim]Tip: Use --export gallery.html for a beautiful standalone page.[/dim]")
+    console.print("=" * 80)
+
+
 def cmd_benchmark(args):
     """Handle the 'benchmark' command - run a full pipeline benchmark."""
     repo = get_repository()
@@ -1011,6 +1064,17 @@ Examples:
     storage_parser.add_argument("--backup", action="store_true", help="Backup all images and metadata")
     storage_parser.add_argument("--export-path", type=str, help="Path for backup export")
     
+    # Gallery command
+    gallery_parser = subparsers.add_parser("gallery", help="View image gallery")
+    gallery_parser.add_argument("--season", type=int, help="Filter by season ID")
+    gallery_parser.add_argument("--mood", help="Filter by mood")
+    gallery_parser.add_argument("--style", help="Filter by style")
+    gallery_parser.add_argument("--start", help="Start date (YYYY-MM-DD)")
+    gallery_parser.add_argument("--end", help="End date (YYYY-MM-DD)")
+    gallery_parser.add_argument("--sort", choices=["date", "mood", "generation_date"], default="date", help="Sort order")
+    gallery_parser.add_argument("--limit", type=int, default=50, help="Max items to show")
+    gallery_parser.add_argument("--export", help="Export to HTML file (e.g., gallery.html)")
+    
     return parser
 
 
@@ -1045,6 +1109,7 @@ def main():
         "generate-poster": cmd_generate_poster,
         "config": cmd_config,
         "storage": cmd_storage,
+        "gallery": cmd_gallery,
     }
     
     handler = commands.get(args.command)

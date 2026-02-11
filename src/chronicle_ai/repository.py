@@ -78,6 +78,10 @@ class EntryRepository:
                 cursor.execute("ALTER TABLE diary_entries ADD COLUMN image_variants TEXT")
             if 'cover_history' not in columns:
                 cursor.execute("ALTER TABLE diary_entries ADD COLUMN cover_history TEXT")
+            if 'mood' not in columns:
+                cursor.execute("ALTER TABLE diary_entries ADD COLUMN mood TEXT")
+            if 'style' not in columns:
+                cursor.execute("ALTER TABLE diary_entries ADD COLUMN style TEXT")
             
             # Create recaps table if it doesn't exist
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='recaps'")
@@ -149,7 +153,9 @@ class EntryRepository:
                     season_id INTEGER,
                     cover_art_path TEXT,
                     image_variants TEXT,
-                    cover_history TEXT
+                    cover_history TEXT,
+                    mood TEXT,
+                    style TEXT
                 )
             """)
             cursor.execute("""
@@ -218,8 +224,8 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            """INSERT INTO diary_entries (date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history) 
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO diary_entries (date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style) 
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 entry.date, 
                 entry.raw_text, 
@@ -234,7 +240,9 @@ class EntryRepository:
                 entry.season_id,
                 entry.cover_art_path,
                 json.dumps(entry.image_variants) if entry.image_variants else None,
-                json.dumps(entry.cover_history) if entry.cover_history else None
+                json.dumps(entry.cover_history) if entry.cover_history else None,
+                entry.mood,
+                entry.style
             )
         )
         
@@ -262,7 +270,7 @@ class EntryRepository:
         
         cursor.execute(
             """UPDATE diary_entries 
-               SET date = ?, raw_text = ?, narrative_text = ?, title = ?, title_options = ?, logline = ?, synopsis = ?, keywords = ?, conflict_data = ?, recap_id = ?, season_id = ?, cover_art_path = ?, image_variants = ?, cover_history = ?
+               SET date = ?, raw_text = ?, narrative_text = ?, title = ?, title_options = ?, logline = ?, synopsis = ?, keywords = ?, conflict_data = ?, recap_id = ?, season_id = ?, cover_art_path = ?, image_variants = ?, cover_history = ?, mood = ?, style = ?
                WHERE id = ?""",
             (
                 entry.date, 
@@ -279,6 +287,8 @@ class EntryRepository:
                 entry.cover_art_path,
                 json.dumps(entry.image_variants) if entry.image_variants else None,
                 json.dumps(entry.cover_history) if entry.cover_history else None,
+                entry.mood,
+                entry.style,
                 entry.id
             )
         )
@@ -302,7 +312,7 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            "SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history FROM diary_entries WHERE id = ?",
+            "SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style FROM diary_entries WHERE id = ?",
             (entry_id,)
         )
         row = cursor.fetchone()
@@ -336,7 +346,7 @@ class EntryRepository:
         conn = self._get_connection()
         cursor = conn.cursor()
         
-        query = "SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history FROM diary_entries ORDER BY date DESC, id DESC"
+        query = "SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style FROM diary_entries ORDER BY date DESC, id DESC"
         if limit:
             query += f" LIMIT {int(limit)}"
         
@@ -388,7 +398,7 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            """SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history 
+            """SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style
                FROM diary_entries 
                WHERE date >= ? AND date <= ?
                ORDER BY date DESC, id DESC""",
@@ -451,6 +461,77 @@ class EntryRepository:
         conn.close()
         
         return deleted
+    
+    def search_gallery(
+        self,
+        season_id: Optional[int] = None,
+        mood: Optional[str] = None,
+        style: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        sort_by: str = "date",
+        limit: int = 50
+    ) -> List[Entry]:
+        """
+        Search for entries with images based on various filters.
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        query = "SELECT * FROM diary_entries WHERE cover_art_path IS NOT NULL"
+        params = []
+        
+        if season_id is not None:
+            query += " AND season_id = ?"
+            params.append(season_id)
+            
+        if mood:
+            query += " AND mood LIKE ?"
+            params.append(f"%{mood}%")
+            
+        if style:
+            query += " AND style = ?"
+            params.append(style)
+            
+        if start_date:
+            query += " AND date >= ?"
+            params.append(start_date)
+            
+        if end_date:
+            query += " AND date <= ?"
+            params.append(end_date)
+            
+        # Sorting
+        if sort_by == "mood":
+            query += " ORDER BY mood ASC, date DESC"
+        elif sort_by == "generation_date":
+            # Just use id as fallback for generation order if date is same
+            query += " ORDER BY id DESC"
+        else:
+            query += " ORDER BY date DESC"
+            
+        query += f" LIMIT {int(limit)}"
+        
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        conn.close()
+        
+        entries = []
+        for row in rows:
+            data = dict(row)
+            if data.get("conflict_data"):
+                data["conflict_data"] = json.loads(data["conflict_data"])
+            if data.get("title_options"):
+                data["title_options"] = json.loads(data["title_options"])
+            if data.get("keywords"):
+                data["keywords"] = json.loads(data["keywords"])
+            if data.get("image_variants"):
+                data["image_variants"] = json.loads(data["image_variants"])
+            if data.get("cover_history"):
+                data["cover_history"] = json.loads(data["cover_history"])
+            entries.append(Entry.from_dict(data))
+            
+        return entries
 
     # --- Recap Methods ---
 
