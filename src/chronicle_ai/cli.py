@@ -169,6 +169,8 @@ def cmd_list(args):
         snippet = entry.snippet(80)
         
         print(f"\n📅 [{entry.date}] ID: {entry.id}")
+        if entry.is_placeholder:
+            print(f"   🖼️  [bold yellow][PLACEHOLDER IMAGE][/bold yellow]")
         print(f"   🎬 {title}")
         if entry.logline:
             print(f"   💡 {entry.logline}")
@@ -744,11 +746,26 @@ def cmd_status(args):
     print(f"🎬 With title: {with_title}")
     print()
     
+    # Count placeholders
+    placeholders = sum(1 for e in entries if e.is_placeholder)
+    needs_retry = sum(1 for e in entries if e.needs_image_retry)
+    
+    print(f"🖼️  Placeholder images: {placeholders}")
+    if needs_retry > 0:
+        print(f"🔄 Needing retry: {needs_retry}")
+    print()
+    
     # Ollama status
     if is_ollama_available():
         print("✅ Ollama: Connected")
     else:
         print("⚠️  Ollama: Not available")
+        
+    # SD status
+    if cover_generator.image_gen.check_health():
+        print("✅ Stable Diffusion: Connected")
+    else:
+        print("⚠️  Stable Diffusion: Not available (using placeholders)")
     
     print("=" * 40)
 
@@ -802,6 +819,43 @@ def cmd_gallery(args):
         filepath = export_gallery_html(entries, output_path=args.export)
         console.print(f"✅ Gallery exported successfully to: [green]{filepath}[/green]")
         return
+
+
+def cmd_retry_images(args):
+    """Handle the 'retry-images' command - regenerate all placeholders."""
+    repo = get_repository()
+    console = Console()
+    
+    entries = repo.list_entries()
+    to_retry = [e for e in entries if e.needs_image_retry]
+    
+    if not to_retry:
+        console.print("[green]✅ No images need retry (no placeholder images found with retry flag).[/green]")
+        return
+        
+    console.print(f"[cyan]🔄 Found {len(to_retry)} episodes with placeholder images to regenerate.[/cyan]")
+    
+    # Check if SD is available before starting
+    if not cover_generator.image_gen.check_health():
+        console.print("[bold red]❌ Stable Diffusion is still unavailable. Please start it before retrying.[/bold red]")
+        return
+
+    success_count = 0
+    for i, entry in enumerate(to_retry, 1):
+        console.print(f"[[bold cyan]{i}/{len(to_retry)}[/bold cyan]] Regenerating Episode {entry.id}: {entry.display_title()}...")
+        try:
+            paths = cover_generator.generate_cover(entry.id, regenerate=True)
+            # Fetch fresh state to check if it's still a placeholder
+            updated_entry = repo.get_entry_by_id(entry.id)
+            if paths and not updated_entry.is_placeholder:
+                success_count += 1
+                console.print(f"  [green]✅ Success![/green]")
+            else:
+                console.print(f"  [yellow]⚠️  Generated another placeholder.[/yellow]")
+        except Exception as e:
+            console.print(f"  [red]❌ Failed: {e}[/red]")
+            
+    console.print(f"\n[bold green]✅ Retry complete! {success_count}/{len(to_retry)} episodes successfully upgraded from placeholders.[/bold green]")
 
     # CLI View
     console.print(f"\n[bold cyan]🖼️  Chronicle Image Gallery ({len(entries)} items)[/bold cyan]")
@@ -1075,6 +1129,9 @@ Examples:
     gallery_parser.add_argument("--limit", type=int, default=50, help="Max items to show")
     gallery_parser.add_argument("--export", help="Export to HTML file (e.g., gallery.html)")
     
+    # Retry images command
+    subparsers.add_parser("retry-images", help="Regenerate all placeholder images when Stable Diffusion is available")
+    
     return parser
 
 
@@ -1110,6 +1167,7 @@ def main():
         "config": cmd_config,
         "storage": cmd_storage,
         "gallery": cmd_gallery,
+        "retry-images": cmd_retry_images,
     }
     
     handler = commands.get(args.command)

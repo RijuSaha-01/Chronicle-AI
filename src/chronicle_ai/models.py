@@ -21,6 +21,7 @@ class CoverMetadata:
     date: str
     settings: dict = field(default_factory=dict)
     variants: dict = field(default_factory=dict)
+    is_placeholder: bool = False
 
     def to_dict(self) -> dict:
         return {
@@ -29,7 +30,8 @@ class CoverMetadata:
             "style": self.style,
             "date": self.date,
             "settings": self.settings,
-            "variants": self.variants
+            "variants": self.variants,
+            "is_placeholder": self.is_placeholder
         }
 
     @classmethod
@@ -42,7 +44,8 @@ class CoverMetadata:
             style=data.get("style", ""),
             date=data.get("date", ""),
             settings=data.get("settings", {}),
-            variants=data.get("variants", {})
+            variants=data.get("variants", {}),
+            is_placeholder=data.get("is_placeholder", False)
         )
 
 
@@ -225,6 +228,8 @@ class Entry:
     cover_history: List[dict] = field(default_factory=list)  # List of CoverMetadata dicts
     mood: Optional[str] = None
     style: Optional[str] = None
+    needs_image_retry: bool = False
+    is_placeholder: bool = False
     
     def to_dict(self) -> dict:
         """Convert entry to dictionary for serialization."""
@@ -245,7 +250,9 @@ class Entry:
             "image_variants": self.image_variants,
             "cover_history": self.cover_history,
             "mood": self.mood,
-            "style": self.style
+            "style": self.style,
+            "needs_image_retry": self.needs_image_retry,
+            "is_placeholder": self.is_placeholder
         }
     
     @classmethod
@@ -268,7 +275,9 @@ class Entry:
             image_variants=data.get("image_variants", {}),
             cover_history=data.get("cover_history", []),
             mood=data.get("mood"),
-            style=data.get("style")
+            style=data.get("style"),
+            needs_image_retry=data.get("needs_image_retry", False),
+            is_placeholder=data.get("is_placeholder", False)
         )
     
     def snippet(self, max_length: int = 100) -> str:

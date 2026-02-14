@@ -53,7 +53,7 @@ class ImageStorageManager:
             
         return self.base_dir / year / str(season.id) / "season_assets"
 
-    def save_episode_images(self, episode_id: int, image_bytes: bytes, prompt: str, is_primary: bool = True) -> Dict[str, str]:
+    def save_episode_images(self, episode_id: int, image_bytes: bytes, prompt: str, is_primary: bool = True, is_placeholder: bool = False) -> Dict[str, str]:
         """
         Saves the primary cover and generated variants for an episode.
         
@@ -127,7 +127,8 @@ class ImageStorageManager:
             "file_size": len(image_bytes),
             "episode_id": episode_id,
             "season_id": episode.season_id,
-            "is_primary": is_primary
+            "is_primary": is_primary,
+            "is_placeholder": is_placeholder
         }
         
         meta_filename = f"metadata{suffix}.json"
@@ -138,6 +139,7 @@ class ImageStorageManager:
             # Update Episode in DB
             episode.cover_art_path = str(cover_path)
             episode.image_variants = variants
+            episode.is_placeholder = is_placeholder
             self.repo.update_entry(episode)
 
         return variants

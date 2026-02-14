@@ -134,85 +134,99 @@ class MoodToVisualPrompt:
             "elements": "cool blues, harsh shadows, isolated figure, frantic brushstrokes, sharp angles",
             "lighting": "cold fluorescent light, long distorted shadows",
             "atmosphere": "claustrophobic, tense, unsettling",
-            "negative": "warm colors, soft light, cozy, relaxing, crowded, smiling, bright"
+            "negative": "warm colors, soft light, cozy, relaxing, crowded, smiling, bright",
+            "colors": ["#1e3c72", "#2a5298"]
         },
         "triumphant": {
             "elements": "warm golds, dynamic pose, expansive vista, rays of light, heroic scale",
             "lighting": "divine golden hour, brilliant sunburst",
             "atmosphere": "epic, powerful, celebratory",
-            "negative": "muted tones, dark, small, weak, static, dull, sad"
+            "negative": "muted tones, dark, small, weak, static, dull, sad",
+            "colors": ["#f8b500", "#fceabb"]
         },
         "melancholic": {
             "elements": "muted colors, rain, empty spaces, window reflection, wilted flowers",
             "lighting": "overcast gray light, dim interior",
             "atmosphere": "sad, reflective, quiet, somber",
-            "negative": "vibrant colors, sunny, happy, busy, energetic, bright light"
+            "negative": "vibrant colors, sunny, happy, busy, energetic, bright light",
+            "colors": ["#606c88", "#3f4c6b"]
         },
         "peaceful": {
             "elements": "soft light, nature, gentle tones, calm water, soft textures",
             "lighting": "soft diffused sunlight, ethereal glow",
             "atmosphere": "serene, tranquil, harmonious",
-            "negative": "harsh shadows, high contrast, chaotic, urban, loud, sharp"
+            "negative": "harsh shadows, high contrast, chaotic, urban, loud, sharp",
+            "colors": ["#acb6e5", "#86fde8"]
         },
         "adventurous": {
             "elements": "winding paths, mountain peaks, backpack, compass, rugged terrain",
             "lighting": "crisp morning light, clear blue sky",
             "atmosphere": "exciting, vast, energetic",
-            "negative": "indoor, stagnant, domestic, boring, dark, closed spaces"
+            "negative": "indoor, stagnant, domestic, boring, dark, closed spaces",
+            "colors": ["#34e89e", "#0f3443"]
         },
         "lonely": {
             "elements": "single chair, empty street, silhouette, distant city lights",
             "lighting": "solitary street lamp, moonlight, cold blue hour",
             "atmosphere": "isolated, quiet, vast, distant",
-            "negative": "crowds, parties, people talking, warmth, intimate, close-up"
+            "negative": "crowds, parties, people talking, warmth, intimate, close-up",
+            "colors": ["#000000", "#434343"]
         },
         "energetic": {
             "elements": "vivid colors, motion blur, fast movement, neon lights, urban rhythm",
             "lighting": "vibrant flashing lights, high contrast",
             "atmosphere": "dynamic, fast-paced, electric",
-            "negative": "slow, static, pale, muted, sleepy, calm, boring"
+            "negative": "slow, static, pale, muted, sleepy, calm, boring",
+            "colors": ["#ff00cc", "#3333ff"]
         },
         "frustrated": {
             "elements": "crimson accents, cluttered desk, broken glass, messy environment",
             "lighting": "harsh red light, flickering bulbs",
             "atmosphere": "chaotic, heated, overwhelming",
-            "negative": "organized, calm, blue, peaceful, slow, clear"
+            "negative": "organized, calm, blue, peaceful, slow, clear",
+            "colors": ["#cb3066", "#161616"]
         },
         "hopeful": {
             "elements": "dawn breaking, sprout through concrete, far horizon, pastel colors",
             "lighting": "first light of morning, soft pinks and oranges",
             "atmosphere": "optimistic, fresh, beginning",
-            "negative": "dead, dark, finality, ending, black, gray, heavy shadows"
+            "negative": "dead, dark, finality, ending, black, gray, heavy shadows",
+            "colors": ["#ffd194", "#70e1f5"]
         },
         "nostalgic": {
             "elements": "sepia tones, vintage objects, film grain, hazy memories",
             "lighting": "faded warm light, light leaks",
             "atmosphere": "sentimental, soft, dreamlike",
-            "negative": "modern, high-tech, sharp, digital, neon, futuristic"
+            "negative": "modern, high-tech, sharp, digital, neon, futuristic",
+            "colors": ["#e6dada", "#274046"]
         },
         "mysterious": {
             "elements": "deep purples, fog, hidden details, occult symbols, obscured face",
             "lighting": "dim moonlight, flickering candles",
             "atmosphere": "enigmatic, secretive, dark",
-            "negative": "clear, bright, sunny, simple, obvious"
+            "negative": "clear, bright, sunny, simple, obvious",
+            "colors": ["#4b6cb7", "#182848"]
         },
         "determined": {
             "elements": "strong contrast, forward motion, clenched focus, urban grit, focused gaze",
             "lighting": "stark side lighting, hard shadows",
             "atmosphere": "resilient, gritty, intense",
-            "negative": "soft, weak, lazy, blurry, peaceful"
+            "negative": "soft, weak, lazy, blurry, peaceful",
+            "colors": ["#232526", "#414345"]
         },
         "exhausted": {
             "elements": "desaturated tones, heavy lids, slumped posture, cluttered background, dying light",
             "lighting": "dim twilight, fading embers",
             "atmosphere": "weary, drained, heavy",
-            "negative": "energetic, bright, fresh, active"
+            "negative": "energetic, bright, fresh, active",
+            "colors": ["#bdc3c7", "#2c3e50"]
         },
         "joyful": {
             "elements": "bright yellows, laughter, colorful confetti, vibrant flowers, upward motion",
             "lighting": "brilliant sunlight, rainbow refraction",
             "atmosphere": "happy, lighthearted, exuberant",
-            "negative": "sad, dark, muted, rain, shadows"
+            "negative": "sad, dark, muted, rain, shadows",
+            "colors": ["#fffbd5", "#b20a2c"]
         }
     }
 

@@ -82,6 +82,10 @@ class EntryRepository:
                 cursor.execute("ALTER TABLE diary_entries ADD COLUMN mood TEXT")
             if 'style' not in columns:
                 cursor.execute("ALTER TABLE diary_entries ADD COLUMN style TEXT")
+            if 'needs_image_retry' not in columns:
+                cursor.execute("ALTER TABLE diary_entries ADD COLUMN needs_image_retry INTEGER DEFAULT 0")
+            if 'is_placeholder' not in columns:
+                cursor.execute("ALTER TABLE diary_entries ADD COLUMN is_placeholder INTEGER DEFAULT 0")
             
             # Create recaps table if it doesn't exist
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='recaps'")
@@ -155,7 +159,9 @@ class EntryRepository:
                     image_variants TEXT,
                     cover_history TEXT,
                     mood TEXT,
-                    style TEXT
+                    style TEXT,
+                    needs_image_retry INTEGER DEFAULT 0,
+                    is_placeholder INTEGER DEFAULT 0
                 )
             """)
             cursor.execute("""
@@ -224,8 +230,8 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            """INSERT INTO diary_entries (date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style) 
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO diary_entries (date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style, needs_image_retry, is_placeholder) 
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 entry.date, 
                 entry.raw_text, 
@@ -242,7 +248,9 @@ class EntryRepository:
                 json.dumps(entry.image_variants) if entry.image_variants else None,
                 json.dumps(entry.cover_history) if entry.cover_history else None,
                 entry.mood,
-                entry.style
+                entry.style,
+                1 if entry.needs_image_retry else 0,
+                1 if entry.is_placeholder else 0
             )
         )
         
@@ -270,7 +278,7 @@ class EntryRepository:
         
         cursor.execute(
             """UPDATE diary_entries 
-               SET date = ?, raw_text = ?, narrative_text = ?, title = ?, title_options = ?, logline = ?, synopsis = ?, keywords = ?, conflict_data = ?, recap_id = ?, season_id = ?, cover_art_path = ?, image_variants = ?, cover_history = ?, mood = ?, style = ?
+               SET date = ?, raw_text = ?, narrative_text = ?, title = ?, title_options = ?, logline = ?, synopsis = ?, keywords = ?, conflict_data = ?, recap_id = ?, season_id = ?, cover_art_path = ?, image_variants = ?, cover_history = ?, mood = ?, style = ?, needs_image_retry = ?, is_placeholder = ?
                WHERE id = ?""",
             (
                 entry.date, 
@@ -289,6 +297,8 @@ class EntryRepository:
                 json.dumps(entry.cover_history) if entry.cover_history else None,
                 entry.mood,
                 entry.style,
+                1 if entry.needs_image_retry else 0,
+                1 if entry.is_placeholder else 0,
                 entry.id
             )
         )
@@ -312,7 +322,7 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            "SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style FROM diary_entries WHERE id = ?",
+            "SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style, needs_image_retry, is_placeholder FROM diary_entries WHERE id = ?",
             (entry_id,)
         )
         row = cursor.fetchone()
@@ -346,7 +356,7 @@ class EntryRepository:
         conn = self._get_connection()
         cursor = conn.cursor()
         
-        query = "SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style FROM diary_entries ORDER BY date DESC, id DESC"
+        query = "SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style, needs_image_retry, is_placeholder FROM diary_entries ORDER BY date DESC, id DESC"
         if limit:
             query += f" LIMIT {int(limit)}"
         
@@ -398,7 +408,7 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            """SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style
+            """SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style, needs_image_retry, is_placeholder
                FROM diary_entries 
                WHERE date >= ? AND date <= ?
                ORDER BY date DESC, id DESC""",
@@ -478,7 +488,7 @@ class EntryRepository:
         conn = self._get_connection()
         cursor = conn.cursor()
         
-        query = "SELECT * FROM diary_entries WHERE cover_art_path IS NOT NULL"
+        query = "SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style, needs_image_retry, is_placeholder FROM diary_entries WHERE cover_art_path IS NOT NULL"
         params = []
         
         if season_id is not None:

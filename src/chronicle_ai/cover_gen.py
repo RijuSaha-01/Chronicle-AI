@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import Optional, Dict, List
 
 try:
-    from PIL import Image
+    from PIL import Image, ImageDraw
     PILLOW_AVAILABLE = True
 except ImportError:
     PILLOW_AVAILABLE = False
@@ -38,6 +38,46 @@ class EpisodeCoverGenerator:
         self.conflict_detector = ConflictDetector()
         self.base_data_dir = base_data_dir
 
+    def _generate_gradient_fallback(self, mood: str, width: int = 1280, height: int = 720) -> Optional[bytes]:
+        """Generate a gradient-based fallback image from mood colors."""
+        if not PILLOW_AVAILABLE:
+            logger.error("Pillow not available, cannot generate gradient fallback")
+            return None
+            
+        mood_data = mood_to_visual.MOOD_LIBRARY.get(mood, mood_to_visual.MOOD_LIBRARY["peaceful"])
+        colors = mood_data.get("colors", ["#434343", "#000000"])
+        
+        # Convert hex to RGB
+        def hex_to_rgb(hex_str):
+            hex_str = hex_str.lstrip('#')
+            return tuple(int(hex_str[i:i+2], 16) for i in (0, 2, 4))
+            
+        c1 = hex_to_rgb(colors[0])
+        c2 = hex_to_rgb(colors[1])
+        
+        image = Image.new('RGB', (width, height))
+        draw = ImageDraw.Draw(image)
+        
+        # Draw vertical gradient
+        for y in range(height):
+            r = int(c1[0] + (c2[0] - c1[0]) * y / height)
+            g = int(c1[1] + (c2[1] - c1[1]) * y / height)
+            b = int(c1[2] + (c2[2] - c1[2]) * y / height)
+            draw.line([(0, y), (width, y)], fill=(r, g, b))
+            
+        # Add a subtle "Placeholder" indicator
+        try:
+            # We don't want to depend on font files, so we just use the default if possible
+            # or skip text. The requirement says "Show clear indicator when image is placeholder vs generated"
+            # We will use metadata and filename for that, but maybe a subtle overlay helps.
+            pass
+        except Exception:
+            pass
+            
+        buf = io.BytesIO()
+        image.save(buf, format='WEBP', quality=80)
+        return buf.getvalue()
+
 
     def _add_to_history(self, episode: Entry):
         """Add current cover to history, keeping only max 5."""
@@ -58,7 +98,8 @@ class EpisodeCoverGenerator:
             "style": style,
             "date": datetime.now().isoformat(),
             "variants": episode.image_variants,
-            "settings": {} # Could store steps, sampler etc
+            "settings": {}, # Could store steps, sampler etc
+            "is_placeholder": episode.is_placeholder
         }
 
         episode.cover_history.insert(0, metadata)
@@ -157,24 +198,55 @@ class EpisodeCoverGenerator:
             if i > 0 and current_seed is not None:
                 current_seed += i * 77 # Simple offset for variations
 
-            image_bytes = self.image_gen.generate(
-                prompt=pos_prompt,
-                negative_prompt=neg_prompt,
-                width=1280,
-                height=720,
-                steps=preset.get("steps", 25),
-                sampler_name=preset.get("sampler"),
-                seed=current_seed
-            )
+            # Check if SD is available
+            sd_available = self.image_gen.check_health()
+            image_bytes = None
+            is_placeholder = False
+
+            if sd_available:
+                image_bytes = self.image_gen.generate(
+                    prompt=pos_prompt,
+                    negative_prompt=neg_prompt,
+                    width=1280,
+                    height=720,
+                    steps=preset.get("steps", 25),
+                    sampler_name=preset.get("sampler"),
+                    seed=current_seed
+                )
+            
+            if not image_bytes:
+                if sd_available:
+                    logger.warning(f"SD generation failed for variation {i+1}, using gradient fallback")
+                else:
+                    logger.info(f"SD is unavailable, generating gradient fallback for {episode.mood}")
+                
+                image_bytes = self._generate_gradient_fallback(episode.mood or "peaceful")
+                is_placeholder = True
+                episode.needs_image_retry = True
+            else:
+                episode.needs_image_retry = False
+                is_placeholder = False
 
             if not image_bytes:
-                logger.error(f"Failed to generate image bytes for variation {i+1}")
+                logger.error(f"Failed to generate ANY image bytes for variation {i+1}")
                 continue
 
             # 4. Save using ImageStorageManager
             try:
-                variants = storage_manager.save_episode_images(episode_id, image_bytes, pos_prompt, is_primary=(i == 0))
+                # Add indicator to prompt if it's a placeholder
+                save_prompt = pos_prompt if not is_placeholder else f"Placeholder: {episode.mood}"
+                variants = storage_manager.save_episode_images(
+                    episode_id, 
+                    image_bytes, 
+                    save_prompt, 
+                    is_primary=(i == 0),
+                    is_placeholder=is_placeholder
+                )
                 file_path = variants.get("original")
+                
+                # Update placeholder flag in episode
+                if i == 0:
+                    episode.is_placeholder = is_placeholder
                 
                 # 5. For the FIRST variation (or single generation), it becomes the active cover
                 if i == 0:
@@ -184,11 +256,12 @@ class EpisodeCoverGenerator:
                     # Add others to history immediately
                     history_item = {
                         "path": str(file_path),
-                        "prompt": pos_prompt,
+                        "prompt": save_prompt,
                         "style": style,
                         "date": datetime.now().isoformat(),
                         "variants": variants,
-                        "settings": {"seed": current_seed, "steps": preset.get("steps"), "sampler": preset.get("sampler")}
+                        "settings": {"seed": current_seed, "steps": preset.get("steps"), "sampler": preset.get("sampler")},
+                        "is_placeholder": is_placeholder
                     }
                     episode.cover_history.insert(0, history_item)
                     episode.cover_history = episode.cover_history[:5]
