@@ -426,26 +426,34 @@ def cmd_regen_cover(args):
         console.print("[bold red]❌ Either --episode or --season is required.[/bold red]")
         return
 
-    for ep_id in episode_ids:
-        console.print(f"\n[bold cyan]🎨 Regenerating Cover for Episode {ep_id}[/bold cyan]")
-        if style: console.print(f"   🎭 Style: {style}")
-        if variations > 1: console.print(f"   🔢 Variations: {variations}")
-        if prompt_override: console.print(f"   ✍️  Prompt: {prompt_override}")
-        
-        paths = cover_generator.generate_cover(
-            ep_id, 
-            regenerate=True, 
+    if len(episode_ids) > 1 and not prompt_override:
+        cover_generator.generate_covers_batch(
+            episode_ids, 
             style_name=style, 
-            prompt_override=prompt_override,
-            variations=variations
+            quality=getattr(args, "quality", "quality")
         )
-        
-        if paths:
-            console.print(f"   [bold green]✅ Success![/bold green] Generated {len(paths)} variants.")
-            for p in paths:
-                console.print(f"      📍 {p}")
-        else:
-            console.print(f"   [bold red]❌ Failed for episode {ep_id}[/bold red]")
+    else:
+        for ep_id in episode_ids:
+            console.print(f"\n[bold cyan]🎨 Regenerating Cover for Episode {ep_id}[/bold cyan]")
+            if style: console.print(f"   🎭 Style: {style}")
+            if variations > 1: console.print(f"   🔢 Variations: {variations}")
+            if prompt_override: console.print(f"   ✍️  Prompt: {prompt_override}")
+            
+            paths = cover_generator.generate_cover(
+                ep_id, 
+                regenerate=True, 
+                style_name=style, 
+                prompt_override=prompt_override,
+                variations=variations,
+                quality_preset=getattr(args, "quality", "quality")
+            )
+            
+            if paths:
+                console.print(f"   [bold green]✅ Success![/bold green] Generated {len(paths)} variants.")
+                for p in paths:
+                    console.print(f"      📍 {p}")
+            else:
+                console.print(f"   [bold red]❌ Failed for episode {ep_id}[/bold red]")
 
 def cmd_covers(args):
     """Handle the 'covers' command - view history and select."""
@@ -879,82 +887,84 @@ def cmd_retry_images(args):
         )
     
     console.print(table)
-    console.print("\n[dim]Tip: Use --export gallery.html for a beautiful standalone page.[/dim]")
-    console.print("=" * 80)
+    console.print("\n[bold cyan]Done![/bold cyan]")
 
 
 def cmd_benchmark(args):
-    """Handle the 'benchmark' command - run a full pipeline benchmark."""
+    """Handle the 'benchmark' command - run performance tests."""
+    import time
+    import os
+    import subprocess
     repo = get_repository()
     console = Console()
     
-    console.print(f"\n[bold cyan]🎬 Chronicle AI - Director Engine Benchmark[/bold cyan]")
+    # Try to import psutil for resource monitoring
+    try:
+        import psutil
+    except ImportError:
+        psutil = None
+    
+    console.print(f"\n[bold cyan]🚀 Chronicle AI - System Benchmark[/bold cyan]")
     console.print("=" * 60)
     
     # 1. Prepare sample entries
     console.print("🧪 Preparing 10 sample entries...")
-    samples = []
+    samples = repo.list_recent_entries(10)
+    if not samples:
+        console.print("[red]❌ No entries found in database to benchmark.[/red]")
+        return
+        
+    episode_ids = [e.id for e in samples]
     
-    # Try to grab 10 recent entries
-    recent = repo.list_recent_entries(10)
-    if len(recent) < 10:
-        console.print(f"⚠️  Only found {len(recent)} entries in database. Creating dummy entries for benchmark...")
-        # Create some dummy entries for testing if needed, or just use what we have
-        samples = recent
-        for i in range(10 - len(recent)):
-            samples.append(Entry(
-                date=f"2024-01-{i+1:02d}",
-                raw_text=f"Benchmark entry {i+1}: Today was a productive day. I worked on the new benchmark suite and optimized the LLM client. It felt good to see the performance improvements."
-            ))
+    # 2. Resource Monitoring
+    cpu_start = psutil.cpu_percent(interval=None) if psutil else 0
+    mem_start = psutil.virtual_memory().percent if psutil else 0
+    
+    # 3. Image Generation Benchmark
+    console.print(f"\n[bold yellow]🖼️  Image Generation Benchmark (10 covers)...[/bold yellow]")
+    
+    if not cover_generator.image_gen.check_health():
+        console.print("[red]⚠️  Stable Diffusion backend not available. Skipping image benchmark.[/red]")
+        img_time = 0
     else:
-        samples = recent[:10]
-        
-    # 2. Run benchmark
-    console.print(f"🚀 Processing {len(samples)} entries...")
-    
-    if not is_ollama_available():
-        console.print("[bold red]❌ Ollama is not available. Benchmark results will reflect fallback performance.[/bold red]")
+        start_time = time.time()
+        # Use our new batch generator
+        cover_generator.generate_covers_batch(
+            episode_ids, 
+            quality=getattr(args, "quality", "quality"),
+            clear_vram=not getattr(args, "no_clear_vram", False)
+        )
+        img_time = time.time() - start_time
+        console.print(f"[green]✅ Image benchmark complete in {img_time:.2f}s[/green]")
 
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
-        TaskProgressColumn(),
-        console=console,
-        transient=True
-    ) as progress:
-        task = progress.add_task("Running benchmark...", total=len(samples))
-        
-        results = director_engine.run_benchmark(samples)
-        progress.update(task, completed=len(samples))
-
-    # 3. Report metrics
-    console.print("\n[bold green]📊 Benchmark Report[/bold green]")
-    console.print("-" * 30)
-    console.print(f"Total Duration: {results['total_duration']:.2f}s")
-    console.print(f"Average per Episode: {results['avg_duration']:.2f}s")
-    console.print("-" * 30)
+    # 4. Final Resource Report
+    cpu_end = psutil.cpu_percent(interval=None) if psutil else 0
+    mem_end = psutil.virtual_memory().percent if psutil else 0
     
-    console.print("\n[bold]Component Breakdown:[/bold]")
-    for comp, stats in results['stats'].items():
-        console.print(f"  🔹 {comp}:")
-        console.print(f"     Average: {stats['avg']:.2f}s")
-        console.print(f"     Max:     {stats['max']:.2f}s")
-        console.print(f"     Count:   {stats['count']}")
+    gpu_report = "N/A"
+    try:
+        # Best effort attempt at nvidia-smi
+        cmd = ['nvidia-smi', '--query-gpu=utilization.gpu,memory.used', '--format=csv,noheader,nounits']
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            gpu_report = result.stdout.strip()
+    except Exception:
+        pass
 
-    console.print("\n[bold]Quality Checks:[/bold]")
-    valid_count = sum(1 for r in results['results'] if r['quality']['valid'])
-    console.print(f"  ✅ Pass Rate: {valid_count}/{len(samples)} ({valid_count/len(samples)*100:.0f}%)")
+    console.print(f"\n[bold green]📊 Benchmark Results Summary[/bold green]")
+    console.print("-" * 40)
     
-    issues = []
-    for r in results['results']:
-        if not r['quality']['valid']:
-            issues.extend(r['quality']['issues'])
+    from rich.table import Table
+    table = Table(show_header=False, box=None)
+    table.add_row("Total Time", f"{img_time:.2f}s")
+    if img_time > 0 and episode_ids:
+        table.add_row("Avg per Image", f"{img_time/len(episode_ids):.2f}s")
+    table.add_row("CPU Usage (start/end)", f"{cpu_start}% / {cpu_end}%")
+    table.add_row("Memory Usage (start/end)", f"{mem_start}% / {mem_end}%")
+    table.add_row("GPU Utilization / VRAM", gpu_report)
     
-    if issues:
-        console.print(f"  ❌ Major Issues: {', '.join(set(issues))}")
-
-    console.print("\n[bold cyan]Done![/bold cyan]")
+    console.print(table)
+    console.print("=" * 60)
 
 
 def cmd_storage(args):
@@ -1081,7 +1091,9 @@ Examples:
     subparsers.add_parser("status", help="Show system status")
     
     # Benchmark command
-    subparsers.add_parser("benchmark", help="Run full pipeline benchmark and report stats")
+    benchmark_parser = subparsers.add_parser("benchmark", help="Run full pipeline benchmark and report stats")
+    benchmark_parser.add_argument("--quality", choices=["fast", "quality"], default="quality", help="Quality preset for image benchmark")
+    benchmark_parser.add_argument("--no-clear-vram", action="store_true", help="Don't clear VRAM between generations")
     
     # Generate cover command (leaving for backward compatibility)
     cover_parser = subparsers.add_parser("generate-cover", help="Generate cinematic cover art for an episode")
@@ -1091,6 +1103,7 @@ Examples:
     cover_parser.add_argument("--variations", type=int, default=1, help="Number of variations to generate")
     cover_parser.add_argument("--prompt", type=str, help="Custom prompt override")
     cover_parser.add_argument("--season", type=int, help="Regenerate all covers for a season")
+    cover_parser.add_argument("--quality", choices=["fast", "quality"], default="quality", help="Quality preset")
 
     # Regen-cover command
     regen_cover_parser = subparsers.add_parser("regen-cover", help="Regenerate cover art with variations and style")
@@ -1099,6 +1112,7 @@ Examples:
     regen_cover_parser.add_argument("--variations", type=int, default=1, help="Number of variations")
     regen_cover_parser.add_argument("--prompt", type=str, help="Custom prompt override")
     regen_cover_parser.add_argument("--season", type=int, help="Regenerate all covers for a season")
+    regen_cover_parser.add_argument("--quality", choices=["fast", "quality"], default="quality", help="Quality preset")
 
     # Covers command
     covers_parser = subparsers.add_parser("covers", help="View cover history and select variants")

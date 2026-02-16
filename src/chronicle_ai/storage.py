@@ -79,6 +79,8 @@ class ImageStorageManager:
             return variants
 
         from io import BytesIO
+        from concurrent.futures import ThreadPoolExecutor
+        
         img = Image.open(BytesIO(image_bytes))
         
         # 1. Primary Cover (WebP) - use exact name if primary
@@ -87,37 +89,43 @@ class ImageStorageManager:
         img.save(cover_path, "WEBP", quality=90)
         variants["original"] = str(cover_path)
 
-        # 2. Medium Thumbnail (640x360)
-        thumb_md_filename = f"thumb_md{suffix}.webp"
-        thumb_md_path = target_dir / thumb_md_filename
-        img.resize((640, 360), Image.Resampling.LANCZOS).save(thumb_md_path, "WEBP", quality=80)
-        variants["medium"] = str(thumb_md_path)
+        def generate_variant(task_type: str):
+            if task_type == "medium":
+                thumb_md_filename = f"thumb_md{suffix}.webp"
+                thumb_md_path = target_dir / thumb_md_filename
+                img.resize((640, 360), Image.Resampling.LANCZOS).save(thumb_md_path, "WEBP", quality=80)
+                return "medium", str(thumb_md_path)
+            elif task_type == "small":
+                thumb_sm_filename = f"thumb_sm{suffix}.webp"
+                thumb_sm_path = target_dir / thumb_sm_filename
+                img.resize((320, 180), Image.Resampling.LANCZOS).save(thumb_sm_path, "WEBP", quality=75)
+                return "small", str(thumb_sm_path)
+            elif task_type == "poster" and is_primary:
+                poster_path = target_dir / f"poster{suffix}.webp"
+                target_ratio = 2/3
+                curr_ratio = img.width / img.height
+                if curr_ratio > target_ratio:
+                    new_width = int(img.height * target_ratio)
+                    offset = (img.width - new_width) // 2
+                    poster_img = img.crop((offset, 0, offset + new_width, img.height))
+                else:
+                    new_height = int(img.width / target_ratio)
+                    offset = (img.height - new_height) // 2
+                    poster_img = img.crop((0, offset, img.width, offset + new_height))
+                
+                poster_img.resize((800, 1200), Image.Resampling.LANCZOS).save(poster_path, "WEBP", quality=85)
+                return "poster", str(poster_path)
+            return None, None
 
-        # 3. Small Thumbnail (320x180)
-        thumb_sm_filename = f"thumb_sm{suffix}.webp"
-        thumb_sm_path = target_dir / thumb_sm_filename
-        img.resize((320, 180), Image.Resampling.LANCZOS).save(thumb_sm_path, "WEBP", quality=75)
-        variants["small"] = str(thumb_sm_path)
-        
-        # 4. Poster variant (vertical 2:3) if helpful
+        tasks = ["medium", "small"]
         if is_primary:
-            poster_path = target_dir / f"poster{suffix}.webp"
-            # Crop to 2:3
-            target_ratio = 2/3
-            curr_ratio = img.width / img.height
-            if curr_ratio > target_ratio:
-                # Too wide, crop sides
-                new_width = int(img.height * target_ratio)
-                offset = (img.width - new_width) // 2
-                poster_img = img.crop((offset, 0, offset + new_width, img.height))
-            else:
-                # Too tall, crop top/bottom
-                new_height = int(img.width / target_ratio)
-                offset = (img.height - new_height) // 2
-                poster_img = img.crop((0, offset, img.width, offset + new_height))
-            
-            poster_img.resize((800, 1200), Image.Resampling.LANCZOS).save(poster_path, "WEBP", quality=85)
-            variants["poster"] = str(poster_path)
+            tasks.append("poster")
+
+        with ThreadPoolExecutor(max_workers=len(tasks)) as executor:
+            task_results = list(executor.map(generate_variant, tasks))
+            for key, path in task_results:
+                if key:
+                    variants[key] = path
 
         # 5. Meta JSON
         metadata = {
@@ -138,7 +146,10 @@ class ImageStorageManager:
         if is_primary:
             # Update Episode in DB
             episode.cover_art_path = str(cover_path)
-            episode.image_variants = variants
+            # Merge with existing image_variants to preserve other metadata like 'config'
+            if not episode.image_variants:
+                episode.image_variants = {}
+            episode.image_variants.update(variants)
             episode.is_placeholder = is_placeholder
             self.repo.update_entry(episode)
 

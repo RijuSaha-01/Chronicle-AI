@@ -150,6 +150,24 @@ class ImageGenerator:
             logger.error(f"Image generation failed: {e}")
             return None
 
+    def unload_models(self) -> bool:
+        """
+        Attempt to clear VRAM by unloading models from the backend.
+        Helpful for memory management during batch generations.
+        """
+        try:
+            if self.backend == "automatic1111":
+                self._make_request("POST", "/sdapi/v1/unload-checkpoint")
+                return True
+            else:
+                # ComfyUI's memory management is usually automatic, 
+                # but we can use /free if available on some versions or just log.
+                logger.info("ComfyUI handles VRAM automatically between generations.")
+                return True
+        except Exception as e:
+            logger.warning(f"Failed to unload models: {e}")
+            return False
+
     def _generate_a1111(self, prompt: str, negative_prompt: str, width: int, height: int, steps: int, seed: int, sampler_name: Optional[str] = None) -> Optional[bytes]:
         payload = {
             "prompt": prompt,
