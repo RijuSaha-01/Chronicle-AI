@@ -81,24 +81,53 @@ class EpisodeCoverGenerator:
 
     def _add_to_history(self, episode: Entry):
         """Add current cover to history, keeping only max 5."""
-        if not episode.cover_art_path:
+        if not episode.cover_art_path or not os.path.exists(episode.cover_art_path):
             return
 
         # Check if already in history (to avoid duplicates if re-selecting)
         history_paths = [h.get("path") for h in episode.cover_history]
-        if episode.cover_art_path in history_paths:
+        if episode.cover_art_path in history_paths and "_" in episode.cover_art_path:
             return
 
         # Get style from metadata if possible, otherwise use setting
         style = self.repo.get_setting("visual_style", "cinematic")
         
+        # Rotate files: Move cover.webp to cover_TIMESTAMP.webp to avoid overwrite
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # Ensure uniqueness if called in same second
+        if any(timestamp in h.get("path", "") for h in episode.cover_history):
+            timestamp += f"_{int(time.time() * 1000) % 1000}"
+
+        old_main_path = Path(episode.cover_art_path)
+        new_main_path = old_main_path.parent / f"cover_{timestamp}.webp"
+        
+        new_variants = {}
+        try:
+            if old_main_path.exists():
+                os.rename(old_main_path, new_main_path)
+                new_variants["original"] = str(new_main_path)
+            
+            # Rotate variants
+            for v_key, v_path in (episode.image_variants or {}).items():
+                if v_key in ["original", "config"]: continue
+                v_p = Path(v_path)
+                if v_p.exists():
+                    new_v_p = v_p.parent / f"{v_p.stem}_{timestamp}{v_p.suffix}"
+                    os.rename(v_p, new_v_p)
+                    new_variants[v_key] = str(new_v_p)
+        except Exception as e:
+            logger.error(f"Failed to rotate cover files: {e}")
+            # Continue anyway with the path, though file might be overwritten
+            new_main_path = old_main_path 
+            new_variants = episode.image_variants.copy()
+
         metadata = {
-            "path": episode.cover_art_path,
-            "prompt": episode.image_variants.get("prompt", "Unknown"),
+            "path": str(new_main_path),
+            "prompt": (episode.image_variants or {}).get("prompt", "Unknown"),
             "style": style,
             "date": datetime.now().isoformat(),
-            "variants": episode.image_variants,
-            "settings": {}, # Could store steps, sampler etc
+            "variants": new_variants,
+            "settings": {}, 
             "is_placeholder": episode.is_placeholder
         }
 
@@ -275,8 +304,10 @@ class EpisodeCoverGenerator:
                     is_placeholder=is_placeholder
                 )
                 
-                # Inject config for caching
+                # Inject config for caching and update local object to avoid overwriting on next update_entry
                 if i == 0:
+                    episode.cover_art_path = variants.get("original")
+                    episode.image_variants.update(variants)
                     episode.image_variants["config"] = current_config
                     episode.is_placeholder = is_placeholder
                 
