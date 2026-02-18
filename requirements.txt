@@ -15,3 +15,6 @@ python-multipart>=0.0.6
 # Optional: Alternative HTTP client if httpx unavailable
 requests>=2.31.0
 
+# TTS Engine
+TTS>=0.22.0
+

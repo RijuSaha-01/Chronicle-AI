@@ -1002,6 +1002,42 @@ def cmd_storage(args):
         console.print(f"   💾 Size: {usage['total_size_mb']} MB")
 
 
+def cmd_narrate(args):
+    """Handle the 'narrate' command - convert episode text to audio."""
+    from rich.console import Console
+    console = Console()
+    repo = get_repository()
+    from .tts_engine import tts_engine
+    
+    episode_id = args.episode
+    entry = repo.get_entry_by_id(episode_id)
+    
+    if not entry:
+        console.print(f"[bold red]❌ Episode {episode_id} not found.[/bold red]")
+        return
+        
+    text = entry.narrative_text or entry.raw_text
+    if not text:
+        console.print(f"[bold red]❌ Episode {episode_id} has no text to narrate.[/bold red]")
+        return
+        
+    voice = args.voice or "storyteller"
+    console.print(f"[cyan]🎙️ Narrating Episode {episode_id} with voice: [bold]{voice}[/bold]...[/cyan]")
+    
+    filename = f"episode_{episode_id}_{voice}.wav"
+    audio_path = tts_engine.generate(text, filename, voice_key=voice)
+    
+    if audio_path:
+        entry.audio_path = audio_path
+        entry.tts_voice = voice
+        repo.update_entry(entry)
+        console.print(f"[bold green]✅ Success![/bold green] Audio saved to: [white]{audio_path}[/white]")
+    else:
+        console.print(f"[bold red]❌ Narration failed.[/bold red]")
+        console.print("[dim]Hint: Make sure Coqui TTS is installed: pip install TTS[/dim]")
+
+
+
 def create_parser() -> argparse.ArgumentParser:
     """Create and configure the argument parser."""
     parser = argparse.ArgumentParser(
@@ -1143,6 +1179,12 @@ Examples:
     gallery_parser.add_argument("--limit", type=int, default=50, help="Max items to show")
     gallery_parser.add_argument("--export", help="Export to HTML file (e.g., gallery.html)")
     
+    # Narrate command
+    narrate_parser = subparsers.add_parser("narrate", help="Convert episode narrative to audio (audiobook mode)")
+    narrate_parser.add_argument("--episode", type=int, required=True, help="Episode ID to narrate")
+    narrate_parser.add_argument("--voice", choices=["storyteller", "dramatic", "calm"], default="storyteller", 
+                               help="Voice style for narration")
+
     # Retry images command
     subparsers.add_parser("retry-images", help="Regenerate all placeholder images when Stable Diffusion is available")
     
@@ -1182,6 +1224,7 @@ def main():
         "storage": cmd_storage,
         "gallery": cmd_gallery,
         "retry-images": cmd_retry_images,
+        "narrate": cmd_narrate,
     }
     
     handler = commands.get(args.command)

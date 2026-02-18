@@ -224,8 +224,10 @@ class Entry:
     recap_id: Optional[int] = None
     season_id: Optional[int] = None
     cover_art_path: Optional[str] = None
-    image_variants: dict = field(default_factory=dict)  # {"original": "path", "medium": "path", "small": "path", "square": "path", "blur": "base64"}
-    cover_history: List[dict] = field(default_factory=list)  # List of CoverMetadata dicts
+    image_variants: dict = field(default_factory=dict)
+    cover_history: List[dict] = field(default_factory=list)
+    audio_path: Optional[str] = None
+    tts_voice: Optional[str] = None
     mood: Optional[str] = None
     style: Optional[str] = None
     needs_image_retry: bool = False
@@ -249,6 +251,8 @@ class Entry:
             "cover_art_path": self.cover_art_path,
             "image_variants": self.image_variants,
             "cover_history": self.cover_history,
+            "audio_path": self.audio_path,
+            "tts_voice": self.tts_voice,
             "mood": self.mood,
             "style": self.style,
             "needs_image_retry": self.needs_image_retry,
@@ -274,6 +278,8 @@ class Entry:
             cover_art_path=data.get("cover_art_path"),
             image_variants=data.get("image_variants") or {},
             cover_history=data.get("cover_history") or [],
+            audio_path=data.get("audio_path"),
+            tts_voice=data.get("tts_voice"),
             mood=data.get("mood"),
             style=data.get("style"),
             needs_image_retry=data.get("needs_image_retry", False),
