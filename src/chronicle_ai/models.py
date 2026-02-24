@@ -5,9 +5,53 @@ Defines the Entry model and related data structures for diary entries.
 """
 
 from dataclasses import dataclass, field
-from typing import Optional, List
+from typing import Optional, List, Dict
 from datetime import date
 import json
+
+
+@dataclass
+class VoiceProfile:
+    """
+    Configuration for a specific narration style.
+    """
+    key: str
+    name: str
+    voice_model: str
+    speed: float = 1.0
+    pitch: float = 0.0
+    pause_durations: Dict[str, float] = field(default_factory=lambda: {
+        "sentence": 0.5,
+        "paragraph": 1.2
+    })
+    description: str = ""
+
+    def to_dict(self) -> dict:
+        return {
+            "key": self.key,
+            "name": self.name,
+            "voice_model": self.voice_model,
+            "speed": self.speed,
+            "pitch": self.pitch,
+            "pause_durations": self.pause_durations,
+            "description": self.description
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "VoiceProfile":
+        if not data:
+            return None
+        return cls(
+            key=data.get("key", ""),
+            name=data.get("name", ""),
+            voice_model=data.get("voice_model", ""),
+            speed=data.get("speed", 1.0),
+            pitch=data.get("pitch", 0.0),
+            pause_durations=data.get("pause_durations", {"sentence": 0.5, "paragraph": 1.2}),
+            description=data.get("description", "")
+        )
+
+
 
 
 @dataclass

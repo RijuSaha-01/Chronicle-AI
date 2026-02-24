@@ -10,6 +10,7 @@ import os
 import time
 from typing import Optional, List, Dict, Any, Generator
 from pathlib import Path
+from .models import VoiceProfile
 
 # Try to import TTS if available
 try:
@@ -24,44 +25,77 @@ class NarratorTTS:
     """
     NarratorTTS handles high-level TTS operations for the Chronicle project.
     It provides an abstraction over local engines (like Coqui XTTS) and
-    streaming interfaces.
+    streaming interfaces using customizable VoiceProfiles.
     """
 
-    VOICES = {
-        "default": {
-            "name": "Abrahan Mack",
-            "description": "Warm, engaging narrative voice, perfect for daily chronicles.",
-            "engine": "coqui"
-        },
-        "storyteller": {
-            "name": "Abrahan Mack",
-            "description": "Warm, engaging narrative voice, perfect for daily chronicles.",
-            "engine": "coqui"
-        },
-        "dramatic": {
-            "name": "Baldur Valur",
-            "description": "Deep, resonant voice for high-tension moments.",
-            "engine": "coqui"
-        },
-        "calm": {
-            "name": "Asya Arafat",
-            "description": "Soft and steady voice for peaceful reflections.",
-            "engine": "coqui"
-        }
+    DEFAULT_PROFILES = {
+        "STORYTELLER": VoiceProfile(
+            key="STORYTELLER",
+            name="Abrahan Mack",
+            voice_model="tts_models/multilingual/multi-dataset/xtts_v2",
+            speed=1.0,
+            pitch=0.0,
+            pause_durations={"sentence": 0.5, "paragraph": 1.2},
+            description="Warm, engaging, audiobook style"
+        ),
+        "DRAMATIC": VoiceProfile(
+            key="DRAMATIC",
+            name="Baldur Valur",
+            voice_model="tts_models/multilingual/multi-dataset/xtts_v2",
+            speed=0.9,
+            pitch=-0.1,
+            pause_durations={"sentence": 0.8, "paragraph": 1.5},
+            description="Intense, theatrical, for high-tension episodes"
+        ),
+        "CALM": VoiceProfile(
+            key="CALM",
+            name="Asya Arafat",
+            voice_model="tts_models/multilingual/multi-dataset/xtts_v2",
+            speed=0.85,
+            pitch=0.1,
+            pause_durations={"sentence": 1.0, "paragraph": 2.0},
+            description="Soothing, documentary style, for reflective episodes"
+        ),
+        "NOIR": VoiceProfile(
+            key="NOIR",
+            name="Baldur Valur",  # Reusing for now, but with deeper pitch if supported
+            voice_model="tts_models/multilingual/multi-dataset/xtts_v2",
+            speed=0.95,
+            pitch=-0.2,
+            pause_durations={"sentence": 0.7, "paragraph": 1.4},
+            description="Deep, mysterious, for darker moods"
+        )
     }
 
-    def __init__(self, engine: str = 'coqui', voice: str = 'default', speed: float = 1.0):
+    MOOD_TO_VOICE = {
+        "productive": "STORYTELLER",
+        "reflective": "CALM",
+        "stressful": "DRAMATIC",
+        "relaxed": "CALM",
+        "mysterious": "NOIR",
+        "adventurous": "STORYTELLER",
+        "melancholic": "CALM",
+        "tense": "DRAMATIC",
+        "joyful": "STORYTELLER",
+        "gloomy": "NOIR"
+    }
+
+    def __init__(self, engine: str = 'coqui', voice_profile: Optional[str] = None, speed_override: Optional[float] = None):
         """
         Initialize the NarratorTTS client.
 
         Args:
             engine: The TTS engine to use ('coqui' or future 'piper')
-            voice: The voice model name or key from VOICES
-            speed: Generation speed multiplier (1.0 is normal)
+            voice_profile: The profile key (e.g., 'STORYTELLER'). Defaults to STORYTELLER.
+            speed_override: Optional speed multiplier to override the profile setting.
         """
         self.engine_type = engine.lower()
-        self.voice_key = voice if voice in self.VOICES else "default"
-        self.speed = speed
+        self.profile_key = voice_profile or "STORYTELLER"
+        
+        # Load profile
+        self.profile = self.DEFAULT_PROFILES.get(self.profile_key, self.DEFAULT_PROFILES["STORYTELLER"])
+        self.speed = speed_override or self.profile.speed
+        
         self._model = None
         
         # Agreement to Coqui TOS (required for XTTS)
@@ -89,7 +123,7 @@ class NarratorTTS:
 
     def synthesize(self, text: str, output_path: str) -> Optional[str]:
         """
-        Synthesize text to an audio file.
+        Synthesize text to an audio file using the current voice profile.
 
         Args:
             text: The narrative text to convert
@@ -103,17 +137,17 @@ class NarratorTTS:
             return None
 
         try:
-            voice_config = self.VOICES.get(self.voice_key, self.VOICES["default"])
-            speaker = voice_config["name"]
+            speaker = self.profile.name
             
             # Ensure output directory exists
             out_path = Path(output_path)
             out_path.parent.mkdir(parents=True, exist_ok=True)
             
-            logger.info(f"🎙️ Narrating ({self.voice_key}): {text[:50]}...")
+            logger.info(f"🎙️ Narrating ({self.profile_key}): {text[:50]}...")
             
-            # Use speed if supported by the version, otherwise standard tts
-            # Note: XTTS v2 tts_to_file usually takes speed as an argument
+            # Note: XTTS v2 tts_to_file takes speed. 
+            # Pitch and pause_durations are stored in profile but may need 
+            # post-processing or text manipulation to be fully realized.
             model.tts_to_file(
                 text=text,
                 speaker=speaker,
@@ -140,19 +174,15 @@ class NarratorTTS:
             return
 
         try:
-            voice_config = self.VOICES.get(self.voice_key, self.VOICES["default"])
-            speaker = voice_config["name"]
+            speaker = self.profile.name
             
-            logger.info(f"💾 Streaming narration for: {text[:30]}...")
+            logger.info(f"💾 Streaming narration for ({self.profile_key}): {text[:30]}...")
             
-            # Mock streaming for now if tts_stream is not directly available in standard API
-            # In production this would use model.tts_stream or similar
             if hasattr(model, 'tts_stream'):
                 for chunk in model.tts_stream(text, speaker, language="en", speed=self.speed):
                     yield chunk
             else:
-                logger.warning("Stream API not found in this TTS version. Falling back to buffered synthesis.")
-                # Fallback: synthesize to temp file and stream that
+                logger.warning("Stream API not found. Falling back to buffered synthesis.")
                 temp_path = f"tmp/stream_{int(time.time())}.wav"
                 result_path = self.synthesize(text, temp_path)
                 if result_path and os.path.exists(result_path):
@@ -164,45 +194,51 @@ class NarratorTTS:
             logger.error(f"❌ Streaming failed: {e}")
             yield b""
 
-    def list_voices(self) -> List[Dict[str, str]]:
+    def list_voices(self) -> List[Dict[str, Any]]:
         """
-        Return available narrative voices with descriptions.
+        Return available narrative voice profiles.
         """
-        return [
-            {
-                "id": key, 
-                "name": val["name"], 
-                "description": val["description"],
-                "engine": val["engine"]
-            }
-            for key, val in self.VOICES.items()
-        ]
+        return [profile.to_dict() for profile in self.DEFAULT_PROFILES.values()]
 
-    def preview_voice(self, voice_name: str, sample_text: str = "Welcome to your story. This is a preview of the narration style.") -> Optional[str]:
+    def preview_voice(self, profile_key: str, sample_text: str = "Welcome to your story. This is a preview of the narration style.") -> Optional[str]:
         """
-        Generate a short audio sample for a specific voice.
+        Generate a short audio sample for a specific voice profile.
 
         Args:
-            voice_name: The voice key to preview
+            profile_key: The profile key to preview
             sample_text: Short text snippet
 
         Returns:
             Path to preview audio file
         """
-        if voice_name not in self.VOICES:
-            logger.error(f"Voice '{voice_name}' not found.")
+        if profile_key not in self.DEFAULT_PROFILES:
+            logger.error(f"Profile '{profile_key}' not found.")
             return None
             
-        old_voice = self.voice_key
-        self.voice_key = voice_name
+        old_profile = self.profile
+        old_key = self.profile_key
+        
+        self.profile = self.DEFAULT_PROFILES[profile_key]
+        self.profile_key = profile_key
         
         preview_dir = Path("exports/previews")
         preview_dir.mkdir(parents=True, exist_ok=True)
-        preview_path = preview_dir / f"preview_{voice_name}.wav"
+        preview_path = preview_dir / f"preview_{profile_key}.wav"
         
         result = self.synthesize(sample_text, str(preview_path))
-        self.voice_key = old_voice
+        
+        self.profile = old_profile
+        self.profile_key = old_key
         return result
+
+    @classmethod
+    def get_profile_for_mood(cls, mood: Optional[str]) -> str:
+        """
+        Auto-select a voice profile based on episode mood.
+        """
+        if not mood:
+            return "STORYTELLER"
+        return cls.MOOD_TO_VOICE.get(mood.lower(), "STORYTELLER")
 
     def get_duration_estimate(self, text: str) -> float:
         """
@@ -229,6 +265,6 @@ class NarratorTTS:
         except Exception:
             return False
 
-def get_tts_client(engine='coqui', voice='default', speed=1.0):
+def get_tts_client(engine='coqui', voice_profile='STORYTELLER', speed=None):
     """Utility function to get a configured TTS client."""
-    return NarratorTTS(engine=engine, voice=voice, speed=speed)
+    return NarratorTTS(engine=engine, voice_profile=voice_profile, speed_override=speed)

@@ -792,12 +792,24 @@ def cmd_config(args):
         else:
             print(f"❌ Invalid style: {style}")
             print(f"💡 Available styles: {', '.join(VisualStylePresets.PRESETS.keys())}")
+    elif getattr(args, 'voice', None):
+        voice = args.voice.upper()
+        from .tts_client import NarratorTTS
+        if voice in NarratorTTS.DEFAULT_PROFILES:
+            repo.set_setting("voice_profile", voice)
+            print(f"✅ Default voice profile updated to: [bold cyan]{voice}[/bold cyan]")
+            print(f"📝 Description: {NarratorTTS.DEFAULT_PROFILES[voice].description}")
+        else:
+            print(f"❌ Invalid voice: {voice}")
+            print(f"💡 Available voices: {', '.join(NarratorTTS.DEFAULT_PROFILES.keys())}")
     else:
         # Show current config
         style = repo.get_setting("visual_style", "cinematic")
+        voice = repo.get_setting("voice_profile", "STORYTELLER")
         print("\n🎬 Chronicle AI Configuration")
         print("=" * 40)
         print(f"🎨 Active Visual Style: {style.upper()}")
+        print(f"🎙️ Default Voice Profile: {voice.upper()}")
         print("=" * 40)
 
 
@@ -1009,6 +1021,17 @@ def cmd_narrate(args):
     repo = get_repository()
     from .tts_engine import tts_engine
     
+    # Handle preview mode
+    if getattr(args, 'preview', False):
+        voice = (args.voice or "storyteller").upper()
+        console.print(f"[cyan]🎙️ Generating preview for voice profile: [bold]{voice}[/bold]...[/cyan]")
+        preview_path = tts_engine.preview(voice)
+        if preview_path:
+            console.print(f"[bold green]✅ Preview generated![/bold green] Play it at: [white]{preview_path}[/white]")
+        else:
+            console.print(f"[bold red]❌ Preview failed.[/bold red]")
+        return
+
     episode_id = args.episode
     entry = repo.get_entry_by_id(episode_id)
     
@@ -1021,17 +1044,24 @@ def cmd_narrate(args):
         console.print(f"[bold red]❌ Episode {episode_id} has no text to narrate.[/bold red]")
         return
         
-    voice = args.voice or "storyteller"
-    console.print(f"[cyan]🎙️ Narrating Episode {episode_id} with voice: [bold]{voice}[/bold]...[/cyan]")
+    # Manual voice or auto-select based on mood
+    voice = args.voice
+    if not voice:
+        console.print(f"[dim]🔍 Auto-selecting voice based on mood: [bold]{entry.mood or 'default'}[/bold][/dim]")
     
-    filename = f"episode_{episode_id}_{voice}.wav"
-    audio_path = tts_engine.generate(text, filename, voice_key=voice)
+    console.print(f"[cyan]🎙️ Narrating Episode {episode_id}...[/cyan]")
+    
+    filename = f"episode_{episode_id}.wav"
+    audio_path = tts_engine.generate(text, filename, voice_key=voice, mood=entry.mood)
     
     if audio_path:
         entry.audio_path = audio_path
-        entry.tts_voice = voice
+        # Use the actual voice key used (could be auto-selected)
+        from .tts_client import NarratorTTS
+        entry.tts_voice = voice.upper() if voice else NarratorTTS.get_profile_for_mood(entry.mood)
         repo.update_entry(entry)
-        console.print(f"[bold green]✅ Success![/bold green] Audio saved to: [white]{audio_path}[/white]")
+        console.print(f"[bold green]✅ Success![/bold green] Audio saved using [bold]{entry.tts_voice}[/bold] style.")
+        console.print(f"📍 Path: [white]{audio_path}[/white]")
     else:
         console.print(f"[bold red]❌ Narration failed.[/bold red]")
         console.print("[dim]Hint: Make sure Coqui TTS is installed: pip install TTS[/dim]")
@@ -1122,6 +1152,8 @@ Examples:
     config_parser = subparsers.add_parser("config", help="Manage system configuration and preferences")
     config_parser.add_argument("--style", type=str, choices=["cinematic", "anime", "noir", "watercolor", "minimalist"], 
                               help="Set the default visual style for cover art")
+    config_parser.add_argument("--voice", type=str, choices=["STORYTELLER", "DRAMATIC", "CALM", "NOIR"], 
+                              help="Set the default voice profile for narration")
 
     # Status command
     subparsers.add_parser("status", help="Show system status")
@@ -1181,9 +1213,10 @@ Examples:
     
     # Narrate command
     narrate_parser = subparsers.add_parser("narrate", help="Convert episode narrative to audio (audiobook mode)")
-    narrate_parser.add_argument("--episode", type=int, required=True, help="Episode ID to narrate")
-    narrate_parser.add_argument("--voice", choices=["storyteller", "dramatic", "calm"], default="storyteller", 
-                               help="Voice style for narration")
+    narrate_parser.add_argument("--episode", type=int, help="Episode ID to narrate")
+    narrate_parser.add_argument("--voice", choices=["STORYTELLER", "DRAMATIC", "CALM", "NOIR"], 
+                               help="Voice style for narration (auto-selected if omitted)")
+    narrate_parser.add_argument("--preview", action="store_true", help="Generate a short sample for the selected voice")
 
     # Retry images command
     subparsers.add_parser("retry-images", help="Regenerate all placeholder images when Stable Diffusion is available")

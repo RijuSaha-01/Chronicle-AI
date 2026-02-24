@@ -138,7 +138,9 @@ class EntryRepository:
                     )
                 """)
                 # Set default visual style
+                # Set defaults
                 cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ("visual_style", "cinematic"))
+                cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ("voice_profile", "STORYTELLER"))
         else:
             # Create table with all columns
             cursor.execute("""
@@ -192,6 +194,7 @@ class EntryRepository:
                 )
             """)
             cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ("visual_style", "cinematic"))
+            cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ("voice_profile", "STORYTELLER"))
         
         conn.commit()
         conn.close()
