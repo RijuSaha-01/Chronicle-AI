@@ -86,6 +86,10 @@ class EntryRepository:
                 cursor.execute("ALTER TABLE diary_entries ADD COLUMN needs_image_retry INTEGER DEFAULT 0")
             if 'is_placeholder' not in columns:
                 cursor.execute("ALTER TABLE diary_entries ADD COLUMN is_placeholder INTEGER DEFAULT 0")
+            if 'audio_duration' not in columns:
+                cursor.execute("ALTER TABLE diary_entries ADD COLUMN audio_duration REAL")
+            if 'audio_path' not in columns:
+                cursor.execute("ALTER TABLE diary_entries ADD COLUMN audio_path TEXT")
             
             # Create recaps table if it doesn't exist
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='recaps'")
@@ -163,7 +167,8 @@ class EntryRepository:
                     mood TEXT,
                     style TEXT,
                     needs_image_retry INTEGER DEFAULT 0,
-                    is_placeholder INTEGER DEFAULT 0
+                    is_placeholder INTEGER DEFAULT 0,
+                    audio_duration REAL
                 )
             """)
             cursor.execute("""
@@ -233,8 +238,8 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            """INSERT INTO diary_entries (date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style, needs_image_retry, is_placeholder) 
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO diary_entries (date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style, needs_image_retry, is_placeholder, audio_duration, audio_path) 
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 entry.date, 
                 entry.raw_text, 
@@ -253,7 +258,9 @@ class EntryRepository:
                 entry.mood,
                 entry.style,
                 1 if entry.needs_image_retry else 0,
-                1 if entry.is_placeholder else 0
+                1 if entry.is_placeholder else 0,
+                entry.audio_duration,
+                entry.audio_path
             )
         )
         
@@ -281,7 +288,7 @@ class EntryRepository:
         
         cursor.execute(
             """UPDATE diary_entries 
-               SET date = ?, raw_text = ?, narrative_text = ?, title = ?, title_options = ?, logline = ?, synopsis = ?, keywords = ?, conflict_data = ?, recap_id = ?, season_id = ?, cover_art_path = ?, image_variants = ?, cover_history = ?, mood = ?, style = ?, needs_image_retry = ?, is_placeholder = ?
+               SET date = ?, raw_text = ?, narrative_text = ?, title = ?, title_options = ?, logline = ?, synopsis = ?, keywords = ?, conflict_data = ?, recap_id = ?, season_id = ?, cover_art_path = ?, image_variants = ?, cover_history = ?, mood = ?, style = ?, needs_image_retry = ?, is_placeholder = ?, audio_duration = ?, audio_path = ?
                WHERE id = ?""",
             (
                 entry.date, 
@@ -302,6 +309,8 @@ class EntryRepository:
                 entry.style,
                 1 if entry.needs_image_retry else 0,
                 1 if entry.is_placeholder else 0,
+                entry.audio_duration,
+                entry.audio_path,
                 entry.id
             )
         )
@@ -325,7 +334,7 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            "SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style, needs_image_retry, is_placeholder FROM diary_entries WHERE id = ?",
+            "SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style, needs_image_retry, is_placeholder, audio_duration, audio_path FROM diary_entries WHERE id = ?",
             (entry_id,)
         )
         row = cursor.fetchone()
@@ -359,7 +368,7 @@ class EntryRepository:
         conn = self._get_connection()
         cursor = conn.cursor()
         
-        query = "SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style, needs_image_retry, is_placeholder FROM diary_entries ORDER BY date DESC, id DESC"
+        query = "SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style, needs_image_retry, is_placeholder, audio_duration, audio_path FROM diary_entries ORDER BY date DESC, id DESC"
         if limit:
             query += f" LIMIT {int(limit)}"
         
@@ -411,7 +420,7 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            """SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style, needs_image_retry, is_placeholder
+            """SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style, needs_image_retry, is_placeholder, audio_duration, audio_path
                FROM diary_entries 
                WHERE date >= ? AND date <= ?
                ORDER BY date DESC, id DESC""",
@@ -491,7 +500,7 @@ class EntryRepository:
         conn = self._get_connection()
         cursor = conn.cursor()
         
-        query = "SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style, needs_image_retry, is_placeholder FROM diary_entries WHERE cover_art_path IS NOT NULL"
+        query = "SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style, needs_image_retry, is_placeholder, audio_duration, audio_path FROM diary_entries WHERE cover_art_path IS NOT NULL"
         params = []
         
         if season_id is not None:

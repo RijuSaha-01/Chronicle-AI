@@ -1067,11 +1067,31 @@ def cmd_narrate(args):
         console.print("[dim]Hint: Make sure Coqui TTS is installed: pip install TTS[/dim]")
 
 
+def cmd_generate_audio(args):
+    """Handle the 'generate-audio' command - full narration with pauses and metadata."""
+    from rich.console import Console
+    console = Console()
+    from .audio_generator import audio_generator
+    
+    episode_id = args.episode
+    console.print(f"[cyan]🎧 Generating full audio narrative for Episode {episode_id}...[/cyan]")
+    
+    try:
+        audio_path = audio_generator.generate_audio(episode_id)
+        if audio_path:
+            console.print(f"[bold green]✅ Success![/bold green] Audio episode generated successfully.")
+            console.print(f"📍 Path: [white]{audio_path}[/white]")
+        else:
+            console.print(f"[bold red]❌ Audio generation failed.[/bold red]")
+    except Exception as e:
+        console.print(f"[bold red]❌ Error: {str(e)}[/bold red]")
+
+
 
 def create_parser() -> argparse.ArgumentParser:
     """Create and configure the argument parser."""
     parser = argparse.ArgumentParser(
-        prog="chronicle-ai",
+        prog="chronicle",
         description="🎬 Chronicle AI - Turn your daily diary into episodic stories",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
@@ -1218,6 +1238,10 @@ Examples:
                                help="Voice style for narration (auto-selected if omitted)")
     narrate_parser.add_argument("--preview", action="store_true", help="Generate a short sample for the selected voice")
 
+    # Generate Audio command
+    gen_audio_parser = subparsers.add_parser("generate-audio", help="Generate full multispan audio with pauses and ID3 tags")
+    gen_audio_parser.add_argument("--episode", type=int, required=True, help="Episode ID to narrate")
+
     # Retry images command
     subparsers.add_parser("retry-images", help="Regenerate all placeholder images when Stable Diffusion is available")
     
@@ -1258,6 +1282,7 @@ def main():
         "gallery": cmd_gallery,
         "retry-images": cmd_retry_images,
         "narrate": cmd_narrate,
+        "generate-audio": cmd_generate_audio,
     }
     
     handler = commands.get(args.command)

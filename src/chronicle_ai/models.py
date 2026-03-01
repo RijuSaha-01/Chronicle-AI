@@ -271,6 +271,7 @@ class Entry:
     image_variants: dict = field(default_factory=dict)
     cover_history: List[dict] = field(default_factory=list)
     audio_path: Optional[str] = None
+    audio_duration: Optional[float] = None
     tts_voice: Optional[str] = None
     mood: Optional[str] = None
     style: Optional[str] = None
@@ -296,6 +297,7 @@ class Entry:
             "image_variants": self.image_variants,
             "cover_history": self.cover_history,
             "audio_path": self.audio_path,
+            "audio_duration": self.audio_duration,
             "tts_voice": self.tts_voice,
             "mood": self.mood,
             "style": self.style,
@@ -323,6 +325,7 @@ class Entry:
             image_variants=data.get("image_variants") or {},
             cover_history=data.get("cover_history") or [],
             audio_path=data.get("audio_path"),
+            audio_duration=data.get("audio_duration"),
             tts_voice=data.get("tts_voice"),
             mood=data.get("mood"),
             style=data.get("style"),
