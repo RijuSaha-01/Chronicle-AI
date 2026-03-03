@@ -80,15 +80,15 @@ class AudioEpisodeGenerator:
             logger.error("Failed to generate combined audio.")
             return None
 
-        # 3. Save as MP3
-        # Create a specific directory for episode audio if needed
-        output_filename = f"episode_{episode_id}_{int(time.time())}.mp3"
-        audio_path = self.output_dir / output_filename
+        # 3. Save as MP3 to temporary location first
+        temp_dir = Path("tmp/audio")
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        temp_audio_path = temp_dir / f"episode_{episode_id}_{int(time.time())}.mp3"
         
         try:
             if PYDUB_AVAILABLE:
-                logger.info(f"💾 Exporting combined audio to {audio_path}...")
-                combined_audio.export(str(audio_path), format="mp3", bitrate="192k")
+                logger.info(f"💾 Exporting combined audio to temp: {temp_audio_path}...")
+                combined_audio.export(str(temp_audio_path), format="mp3", bitrate="192k")
             else:
                 logger.error("pydub is required to export MP3 with pauses.")
                 return None
@@ -96,16 +96,15 @@ class AudioEpisodeGenerator:
             logger.error(f"Failed to export MP3: {e}")
             return None
 
-        # 4. Embed ID3 metadata
-        self._embed_metadata(audio_path, entry)
+        # 4. Hand over to AudioStorageManager for organized storage, metadata embedding, and linking
+        from .audio_storage import audio_storage_manager
+        final_path = audio_storage_manager.move_to_storage(
+            episode_id=episode_id,
+            temp_audio_path=str(temp_audio_path),
+            duration=total_duration
+        )
 
-        # 5. Store duration and path in database
-        entry.audio_path = str(audio_path.absolute())
-        entry.audio_duration = total_duration
-        self.repo.update_entry(entry)
-
-        logger.info(f"✅ Audio generation complete: {audio_path} ({total_duration:.2f}s)")
-        return str(audio_path)
+        return final_path
 
     def _parse_sections(self, text: str) -> List[Dict]:
         """
@@ -213,46 +212,6 @@ class AudioEpisodeGenerator:
             logger.error(f"Error during audio assembly: {e}")
             return None, 0.0
 
-    def _embed_metadata(self, audio_path: Path, entry: Entry):
-        """
-        Embed ID3 metadata into the MP3 file.
-        """
-        if not MUTAGEN_AVAILABLE:
-            return
-
-        try:
-            # Use easy ID3 or standard
-            from mutagen.id3 import ID3, TIT2, TPE1, TALB, TRCK
-            
-            # Ensure file exists and is accessible
-            if not audio_path.exists():
-                return
-
-            audio = MP3(str(audio_path), ID3=ID3)
-            
-            if audio.tags is None:
-                audio.add_tags()
-            
-            # Season look-up for album
-            season_title = "Chronicle AI"
-            if entry.season_id:
-                season = self.repo.get_season_by_id(entry.season_id)
-                if season:
-                    season_title = season.title
-
-            # Title
-            audio.tags.add(TIT2(encoding=3, text=entry.title or f"Episode {entry.id}"))
-            # Narrator / Artist
-            audio.tags.add(TPE1(encoding=3, text=entry.tts_voice or "Narrator"))
-            # Album
-            audio.tags.add(TALB(encoding=3, text=season_title))
-            # Track Number
-            audio.tags.add(TRCK(encoding=3, text=str(entry.id or "")))
-            
-            audio.save()
-            logger.info("ID3 metadata embedded successfully.")
-        except Exception as e:
-            logger.error(f"Failed to embed metadata: {e}")
 
 # Singleton instance
 audio_generator = AudioEpisodeGenerator()

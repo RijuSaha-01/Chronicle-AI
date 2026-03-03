@@ -262,6 +262,18 @@ def cmd_export(args):
             print(f"✅ Entry exported to: {filepath}")
         else:
             print(f"❌ Entry with ID {args.id} not found.")
+    elif args.audio:
+        repo = get_repository()
+        from .audio_storage import audio_storage_manager
+        entry = repo.get_entry_by_id(args.audio)
+        if entry:
+            target = args.to or f"exports/audio/episode_{entry.id}.mp3"
+            if audio_storage_manager.export_audio(entry.id, target):
+                print(f"✅ Audio exported to: {target}")
+            else:
+                print(f"❌ Failed to export audio for Episode {entry.id}. Make sure it's generated.")
+        else:
+            print(f"❌ Episode {args.audio} not found.")
     else:
         print("📚 Exporting all entries...")
         from .exports import export_all_entries
@@ -1006,12 +1018,35 @@ def cmd_storage(args):
         console.print("[cyan]📦 Creating image backup...[/cyan]")
         path = storage_manager.backup_images(args.export_path)
         console.print(f"[bold green]✅ Backup complete! Saved to: {path}[/bold green]")
+    elif args.audio:
+        from .audio_storage import audio_storage_manager
+        usage = audio_storage_manager.get_storage_usage()
+        console.print(f"\n[bold cyan]🎧 Audio Storage Usage[/bold cyan]")
+        console.print(f"   📍 Base Path: [dim]{usage['base_path']}[/dim]")
+        console.print(f"   📂 File Count: {usage['file_count']}")
+        console.print(f"   💾 Total Size: [bold green]{usage['total_size_mb']} MB[/bold green]")
+        console.print(f"   🕒 Total Duration: [bold]{usage['total_duration_hours']} hours[/bold]")
+    elif args.playlist:
+        from .audio_storage import audio_storage_manager
+        console.print(f"[cyan]🎵 Generating playlist for Season {args.playlist}...[/cyan]")
+        path = audio_storage_manager.generate_season_playlist(args.playlist)
+        if path:
+            console.print(f"[bold green]✅ Playlist generated successfully![/bold green]")
+            console.print(f"   📍 Path: [white]{path}[/white]")
+        else:
+            console.print(f"[bold red]❌ Failed to generate playlist. Make sure episodes have audio generated.[/bold red]")
     else:
         # Default to usage
         usage = storage_manager.get_storage_usage()
         console.print(f"\n[bold cyan]🖼️  Image Storage Overview[/bold cyan]")
         console.print(f"   📂 Files: {usage['file_count']}")
         console.print(f"   💾 Size: {usage['total_size_mb']} MB")
+        
+        from .audio_storage import audio_storage_manager
+        a_usage = audio_storage_manager.get_storage_usage()
+        console.print(f"\n[bold cyan]🎧 Audio Storage Overview[/bold cyan]")
+        console.print(f"   📂 Files: {a_usage['file_count']}")
+        console.print(f"   💾 Size: {a_usage['total_size_mb']} MB")
 
 
 def cmd_narrate(args):
@@ -1135,6 +1170,8 @@ Examples:
     export_group.add_argument("--weekly", "-w", action="store_true", help="Export weekly summary")
     export_group.add_argument("--date", "-d", type=str, help="Export specific date (YYYY-MM-DD)")
     export_group.add_argument("--id", type=int, help="Export specific entry by ID")
+    export_group.add_argument("--audio", type=int, help="Export audio for a specific episode by ID")
+    export_parser.add_argument("--to", type=str, help="Target path for export")
     
     recap_parser = subparsers.add_parser("recap", help="Generate a 'Previously on Chronicle...' summary")
     recap_parser.add_argument("--days", type=int, default=7, help="Number of days to analyze (default: 7)")
@@ -1216,8 +1253,10 @@ Examples:
     # Storage command
     storage_parser = subparsers.add_parser("storage", help="Manage image storage and usage")
     storage_parser.add_argument("--images", action="store_true", help="Show image storage usage")
+    storage_parser.add_argument("--audio", action="store_true", help="Show audio storage usage")
     storage_parser.add_argument("--cleanup", action="store_true", help="Remove orphaned images")
     storage_parser.add_argument("--backup", action="store_true", help="Backup all images and metadata")
+    storage_parser.add_argument("--playlist", type=int, help="Generate .m3u playlist for a season by ID")
     storage_parser.add_argument("--export-path", type=str, help="Path for backup export")
     
     # Gallery command

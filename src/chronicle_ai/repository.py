@@ -13,6 +13,10 @@ from datetime import date, timedelta
 from .models import Entry, ConflictAnalysis, Recap, Season, SeasonArc
 
 
+# All columns for the diary_entries table to ensure consistency in SELECT queries
+ENTRY_COLUMNS = "id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style, needs_image_retry, is_placeholder, audio_duration, audio_path, audio_file_size, audio_generation_date"
+
+
 # Default database location (can be overridden via environment variable)
 DEFAULT_DB_NAME = "chronicle_ai.db"
 
@@ -90,6 +94,10 @@ class EntryRepository:
                 cursor.execute("ALTER TABLE diary_entries ADD COLUMN audio_duration REAL")
             if 'audio_path' not in columns:
                 cursor.execute("ALTER TABLE diary_entries ADD COLUMN audio_path TEXT")
+            if 'audio_file_size' not in columns:
+                cursor.execute("ALTER TABLE diary_entries ADD COLUMN audio_file_size INTEGER")
+            if 'audio_generation_date' not in columns:
+                cursor.execute("ALTER TABLE diary_entries ADD COLUMN audio_generation_date TEXT")
             
             # Create recaps table if it doesn't exist
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='recaps'")
@@ -168,7 +176,10 @@ class EntryRepository:
                     style TEXT,
                     needs_image_retry INTEGER DEFAULT 0,
                     is_placeholder INTEGER DEFAULT 0,
-                    audio_duration REAL
+                    audio_duration REAL,
+                    audio_path TEXT,
+                    audio_file_size INTEGER,
+                    audio_generation_date TEXT
                 )
             """)
             cursor.execute("""
@@ -238,8 +249,8 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            """INSERT INTO diary_entries (date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style, needs_image_retry, is_placeholder, audio_duration, audio_path) 
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO diary_entries (date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style, needs_image_retry, is_placeholder, audio_duration, audio_path, audio_file_size, audio_generation_date) 
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 entry.date, 
                 entry.raw_text, 
@@ -260,7 +271,9 @@ class EntryRepository:
                 1 if entry.needs_image_retry else 0,
                 1 if entry.is_placeholder else 0,
                 entry.audio_duration,
-                entry.audio_path
+                entry.audio_path,
+                entry.audio_file_size,
+                entry.audio_generation_date
             )
         )
         
@@ -288,7 +301,7 @@ class EntryRepository:
         
         cursor.execute(
             """UPDATE diary_entries 
-               SET date = ?, raw_text = ?, narrative_text = ?, title = ?, title_options = ?, logline = ?, synopsis = ?, keywords = ?, conflict_data = ?, recap_id = ?, season_id = ?, cover_art_path = ?, image_variants = ?, cover_history = ?, mood = ?, style = ?, needs_image_retry = ?, is_placeholder = ?, audio_duration = ?, audio_path = ?
+               SET date = ?, raw_text = ?, narrative_text = ?, title = ?, title_options = ?, logline = ?, synopsis = ?, keywords = ?, conflict_data = ?, recap_id = ?, season_id = ?, cover_art_path = ?, image_variants = ?, cover_history = ?, mood = ?, style = ?, needs_image_retry = ?, is_placeholder = ?, audio_duration = ?, audio_path = ?, audio_file_size = ?, audio_generation_date = ?
                WHERE id = ?""",
             (
                 entry.date, 
@@ -311,6 +324,8 @@ class EntryRepository:
                 1 if entry.is_placeholder else 0,
                 entry.audio_duration,
                 entry.audio_path,
+                entry.audio_file_size,
+                entry.audio_generation_date,
                 entry.id
             )
         )
@@ -334,7 +349,7 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            "SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style, needs_image_retry, is_placeholder, audio_duration, audio_path FROM diary_entries WHERE id = ?",
+            f"SELECT {ENTRY_COLUMNS} FROM diary_entries WHERE id = ?",
             (entry_id,)
         )
         row = cursor.fetchone()
@@ -368,7 +383,7 @@ class EntryRepository:
         conn = self._get_connection()
         cursor = conn.cursor()
         
-        query = "SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style, needs_image_retry, is_placeholder, audio_duration, audio_path FROM diary_entries ORDER BY date DESC, id DESC"
+        query = f"SELECT {ENTRY_COLUMNS} FROM diary_entries ORDER BY date DESC, id DESC"
         if limit:
             query += f" LIMIT {int(limit)}"
         
@@ -420,7 +435,7 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            """SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style, needs_image_retry, is_placeholder, audio_duration, audio_path
+            f"""SELECT {ENTRY_COLUMNS}
                FROM diary_entries 
                WHERE date >= ? AND date <= ?
                ORDER BY date DESC, id DESC""",
@@ -500,7 +515,7 @@ class EntryRepository:
         conn = self._get_connection()
         cursor = conn.cursor()
         
-        query = "SELECT id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style, needs_image_retry, is_placeholder, audio_duration, audio_path FROM diary_entries WHERE cover_art_path IS NOT NULL"
+        query = f"SELECT {ENTRY_COLUMNS} FROM diary_entries WHERE cover_art_path IS NOT NULL"
         params = []
         
         if season_id is not None:
