@@ -74,7 +74,7 @@ class AudioEpisodeGenerator:
         sequence = self._parse_sections(text)
         
         # 2. Generate and combine audio chunks
-        combined_audio, total_duration = self._synthesize_and_combine(sequence, entry)
+        combined_audio, total_duration, chapters = self._synthesize_and_combine(sequence, entry)
         
         if not combined_audio:
             logger.error("Failed to generate combined audio.")
@@ -104,6 +104,11 @@ class AudioEpisodeGenerator:
             duration=total_duration
         )
 
+        # 5. Add chapter markers if available
+        if chapters and final_path:
+            logger.info(f"🔖 Adding {len(chapters)} chapters to {final_path}")
+            audio_storage_manager.add_chapters(final_path, chapters)
+
         return final_path
 
     def _parse_sections(self, text: str) -> List[Dict]:
@@ -116,7 +121,7 @@ class AudioEpisodeGenerator:
         - Paragraphs: '\n\n'
         """
         # First, split by likely Act markers
-        act_pattern = r'(### (?:Cold Open|Act \d+|Tag|Introduction|Conclusion|Opening|Closing))'
+        act_pattern = r'(### (?:Cold Open|Act \d+|Act [IVXLCDM]+|Tag|Introduction|Conclusion|Opening|Closing))'
         parts = re.split(act_pattern, text, flags=re.IGNORECASE)
         
         # Initial flattening
@@ -128,21 +133,27 @@ class AudioEpisodeGenerator:
                 if not parts[i].strip():
                     continue
                 if re.match(act_pattern, parts[i], re.IGNORECASE):
-                    raw_parts.append({"type": "act_header", "text": parts[i]})
+                    # Clean up marker for title (e.g., '### Act 1' -> 'Act 1')
+                    title = parts[i].replace('###', '').strip()
+                    raw_parts.append({"type": "chapter_marker", "text": title})
                 else:
                     raw_parts.append({"type": "content", "text": parts[i]})
 
-        # Sequence of (type, value) where type is 'text' or 'pause'
+        # Sequence of (type, value) where type is 'text', 'pause', or 'chapter_marker'
         sequence = []
         
+        # If the text doesn't start with a marker, add an implicit 'Intro' or 'Start'
+        has_initial_marker = any(p["type"] == "chapter_marker" for p in raw_parts[:2])
+        if not has_initial_marker:
+            sequence.append({"type": "chapter_marker", "text": "Introduction"})
+
         for i, part in enumerate(raw_parts):
-            if part["type"] == "act_header":
+            if part["type"] == "chapter_marker":
                 # Add a longer pause before a new act (except the very first item)
                 if i > 0:
                     sequence.append({"type": "pause", "duration": self.PAUSES["act"]})
-                # We usually don't narrate the header itself unless requested, 
-                # but let's keep it as text for now if the user wants it heard.
-                # Common practice: silence or a jingle. Here we just use silence.
+                
+                sequence.append({"type": "chapter_marker", "text": part["text"]})
                 continue
                 
             content = part["text"]
@@ -164,15 +175,17 @@ class AudioEpisodeGenerator:
 
         return sequence
 
-    def _synthesize_and_combine(self, sequence: List[Dict], entry: Entry) -> Tuple[Optional['AudioSegment'], float]:
+    def _synthesize_and_combine(self, sequence: List[Dict], entry: Entry) -> Tuple[Optional['AudioSegment'], float, List[Dict]]:
         """
         Synthesizes text items and interleaves pauses.
+        Returns: (AudioSegment, total_duration_seconds, chapter_list)
         """
         if not PYDUB_AVAILABLE:
-            return None, 0.0
+            return None, 0.0, []
 
         combined = AudioSegment.empty()
         total_duration = 0.0
+        chapters = []
         
         # Temporary directory for chunks
         temp_dir = Path("tmp/audio_chunks")
@@ -180,7 +193,14 @@ class AudioEpisodeGenerator:
 
         try:
             for i, item in enumerate(sequence):
-                if item["type"] == "pause":
+                if item["type"] == "chapter_marker":
+                    # Record chapter start time in milliseconds
+                    chapters.append({
+                        "title": item["text"],
+                        "start_ms": int(total_duration * 1000)
+                    })
+                
+                elif item["type"] == "pause":
                     duration_ms = int(item["duration"] * 1000)
                     combined += AudioSegment.silent(duration=duration_ms)
                     total_duration += item["duration"]
@@ -207,10 +227,10 @@ class AudioEpisodeGenerator:
                     else:
                         logger.warning(f"Failed to generate audio for text: {item['text'][:30]}...")
             
-            return combined, total_duration
+            return combined, total_duration, chapters
         except Exception as e:
             logger.error(f"Error during audio assembly: {e}")
-            return None, 0.0
+            return None, 0.0, []
 
 
 # Singleton instance

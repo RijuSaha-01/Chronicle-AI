@@ -12,7 +12,7 @@ from typing import Dict, Any, List, Optional
 
 try:
     from mutagen.mp3 import MP3
-    from mutagen.id3 import ID3, TIT2, TPE1, TALB, TRCK, APIC
+    from mutagen.id3 import ID3, TIT2, TPE1, TALB, TRCK, APIC, CHAP, CTOC
     MUTAGEN_AVAILABLE = True
 except ImportError:
     MUTAGEN_AVAILABLE = False
@@ -135,6 +135,82 @@ class AudioStorageManager:
             logger.info(f"Metadata embedded for {audio_path}")
         except Exception as e:
             logger.error(f"Failed to embed ID3 tags: {e}")
+
+    def add_chapters(self, audio_path: str, chapter_list: List[Dict]):
+        """
+        Embeds chapter markers into MP3 and creates a companion .chapters file.
+        
+        chapter_list: List of dicts with 'title' and 'start_ms'
+        """
+        if not os.path.exists(audio_path):
+            return
+
+        # 1. Embed chapters in ID3 if mutagen is available
+        if MUTAGEN_AVAILABLE:
+            try:
+                audio = MP3(audio_path, ID3=ID3)
+                
+                # Table of Contents
+                child_ids = [f"chp{i}" for i in range(len(chapter_list))]
+                audio.tags.add(CTOC(
+                    element_id="toc",
+                    flags=3, # top-level, ordered
+                    child_element_ids=child_ids
+                ))
+                
+                # Individual Chapters
+                for i, chap in enumerate(chapter_list):
+                    start_ms = chap['start_ms']
+                    # Use 0xFFFFFFFF (end of file) if it's the last chapter, otherwise next start_ms
+                    end_ms = chapter_list[i+1]['start_ms'] if i + 1 < len(chapter_list) else 0xFFFFFFFF
+                    
+                    audio.tags.add(CHAP(
+                        element_id=f"chp{i}",
+                        start_time=start_ms,
+                        end_time=end_ms,
+                        sub_frames=[TIT2(encoding=3, text=chap['title'])]
+                    ))
+                
+                audio.save()
+                logger.info(f"Chapter frames embedded for {audio_path}")
+            except Exception as e:
+                logger.error(f"Failed to embed chapter frames: {e}")
+
+        # 2. Create .chapters file
+        chapters_file_path = Path(audio_path).with_suffix('.chapters')
+        try:
+            with open(chapters_file_path, "w", encoding="utf-8") as f:
+                f.write("# Chronicle AI Chapters\n")
+                print("\nChapter List:")
+                for i, chap in enumerate(chapter_list):
+                    start_ms = chap['start_ms']
+                    # Calculate duration
+                    if i + 1 < len(chapter_list):
+                        duration_ms = chapter_list[i+1]['start_ms'] - start_ms
+                    else:
+                        # For last chapter, we need total duration. Let's try to get it from MP3
+                        try:
+                            audio = MP3(audio_path)
+                            duration_ms = int(audio.info.length * 1000) - start_ms
+                        except:
+                            duration_ms = 0
+                    
+                    # Format timestamp HH:MM:SS.mmm
+                    s, ms = divmod(start_ms, 1000)
+                    m, s = divmod(s, 60)
+                    h, m = divmod(m, 60)
+                    timestamp = f"{h:02d}:{m:02d}:{s:02d}.{ms:03d}"
+                    
+                    line = f"{timestamp} {chap['title']}"
+                    f.write(f"{line}\n")
+                    
+                    # Log to console for user visibility
+                    dur_s = duration_ms / 1000
+                    print(f"- {chap['title']} at {timestamp} ({dur_s:.1f}s)")
+                    
+            logger.info(f"Companion chapters file created: {chapters_file_path}")
+        except Exception as e:
+            logger.error(f"Failed to create .chapters file: {e}")
 
     def generate_season_playlist(self, season_id: int) -> Optional[str]:
         """
