@@ -274,14 +274,13 @@ class Entry:
     audio_duration: Optional[float] = None
     audio_file_size: Optional[int] = None
     audio_generation_date: Optional[str] = None
+    playback_position: float = 0.0  # seconds
     tts_voice: Optional[str] = None
     mood: Optional[str] = None
     style: Optional[str] = None
     needs_image_retry: bool = False
     is_placeholder: bool = False
     
-    def to_dict(self) -> dict:
-        """Convert entry to dictionary for serialization."""
         return {
             "id": self.id,
             "date": self.date,
@@ -302,6 +301,7 @@ class Entry:
             "audio_duration": self.audio_duration,
             "audio_file_size": self.audio_file_size,
             "audio_generation_date": self.audio_generation_date,
+            "playback_position": self.playback_position,
             "tts_voice": self.tts_voice,
             "mood": self.mood,
             "style": self.style,
@@ -309,9 +309,6 @@ class Entry:
             "is_placeholder": self.is_placeholder
         }
     
-    @classmethod
-    def from_dict(cls, data: dict) -> "Entry":
-        """Create an Entry from a dictionary."""
         return cls(
             id=data.get("id"),
             date=data.get("date", date.today().isoformat()),
@@ -332,6 +329,7 @@ class Entry:
             audio_duration=data.get("audio_duration"),
             audio_file_size=data.get("audio_file_size"),
             audio_generation_date=data.get("audio_generation_date"),
+            playback_position=data.get("playback_position", 0.0),
             tts_voice=data.get("tts_voice"),
             mood=data.get("mood"),
             style=data.get("style"),

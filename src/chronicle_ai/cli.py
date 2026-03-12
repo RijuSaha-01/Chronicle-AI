@@ -6,6 +6,9 @@ Full-featured CLI for diary management with guided input, AI processing, and exp
 
 import argparse
 import sys
+import os
+import re
+import time
 from datetime import date
 
 from .models import Entry
@@ -1102,6 +1105,10 @@ def cmd_narrate(args):
         console.print("[dim]Hint: Make sure Coqui TTS is installed: pip install TTS[/dim]")
 
 
+    except Exception as e:
+        console.print(f"[bold red]❌ Error: {str(e)}[/bold red]")
+
+
 def cmd_generate_audio(args):
     """Handle the 'generate-audio' command - full narration with pauses and metadata."""
     from rich.console import Console
@@ -1120,6 +1127,221 @@ def cmd_generate_audio(args):
             console.print(f"[bold red]❌ Audio generation failed.[/bold red]")
     except Exception as e:
         console.print(f"[bold red]❌ Error: {str(e)}[/bold red]")
+
+
+def cmd_play(args):
+    """Handle the 'chronicle play' command - interactive audio playback."""
+    repo = get_repository()
+    episode = repo.get_entry_by_id(args.episode)
+    
+    if not episode:
+        print(f"❌ Episode {args.episode} not found.")
+        return
+        
+    if not episode.audio_path or not os.path.exists(episode.audio_path):
+        print(f"❌ Audio not found for Episode {args.episode}. Run 'chronicle generate-audio --episode {args.episode}' first.")
+        return
+
+    # 1. Load Chapters from .chapters file
+    chapters = []
+    chapters_path = os.path.splitext(episode.audio_path)[0] + ".chapters"
+    if os.path.exists(chapters_path):
+        try:
+            with open(chapters_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    if line.startswith("#") or not line.strip():
+                        continue
+                    # Format: HH:MM:SS.mmm Title
+                    match = re.match(r"^(\d{2}):(\d{2}):(\d{2})\.(\d{3})\s+(.*)$", line)
+                    if match:
+                        h, m, s, ms, title = match.groups()
+                        start_sec = int(h) * 3600 + int(m) * 60 + int(s) + int(ms) / 1000.0
+                        chapters.append({"title": title, "start": start_sec})
+        except Exception as e:
+            print(f"⚠️  Could not load chapters: {e}")
+
+    # 2. Init Pygame Mixer
+    try:
+        import pygame
+        pygame.mixer.init()
+    except ImportError:
+        print("❌ 'pygame' is required for playback. Run: pip install pygame")
+        return
+    except Exception as e:
+        print(f"❌ Failed to initialize audio mixer: {e}")
+        return
+
+    # 3. Playback Logic
+    def format_time(seconds):
+        m, s = divmod(int(seconds), 60)
+        return f"{m:02d}:{s:02d}"
+
+    def get_current_chapter(pos):
+        current = "Narration"
+        for i, ch in enumerate(chapters):
+            if pos >= ch["start"]:
+                current = f"Act {i+1}: {ch['title']}" if "Act" not in ch["title"] else ch["title"]
+        return current
+
+    total_duration = episode.audio_duration or 0.0
+    if total_duration == 0:
+        # Try to get duration from file if DB missing it
+        try:
+            from mutagen.mp3 import MP3
+            audio = MP3(episode.audio_path)
+            total_duration = audio.info.length
+        except:
+            total_duration = 300.0 # Fallback
+
+    start_pos = episode.playback_position or 0.0
+    if start_pos >= total_duration - 1: start_pos = 0.0
+    
+    pygame.mixer.music.load(episode.audio_path)
+    pygame.mixer.music.play(0, start_pos)
+    
+    current_offset = start_pos
+    volume = 0.7
+    pygame.mixer.music.set_volume(volume)
+    is_paused = False
+    show_chapters_overlay = False
+    
+    from rich.live import Live
+    from rich.panel import Panel
+    from rich.layout import Layout
+    from rich.progress import ProgressBar
+    from rich.text import Text
+    
+    console = Console()
+    
+    def make_display(pos, vol, paused, chapter, show_ch):
+        pos = min(pos, total_duration)
+        perc = (pos / total_duration) * 100 if total_duration > 0 else 0
+        
+        # Build status line
+        status = "⏸️ PAUSED" if paused else "▶️ PLAYING"
+        time_info = f"{format_time(pos)} / {format_time(total_duration)}"
+        vol_info = f"🔊 {int(vol*100)}%"
+        
+        header = Text.assemble(
+            (f" 🎬 {episode.display_title()} ", "bold cyan reverse"),
+            (f"  {status}  ", "bold yellow" if paused else "bold green"),
+            (f"  {vol_info}  ", "bold magenta"),
+            (f"  {time_info} ", "bold white")
+        )
+        
+        # Progress Bar
+        bar = ProgressBar(total=total_duration, completed=pos, width=60)
+        
+        content = [
+            header,
+            "\n",
+            Text(f" 📖 {chapter}", style="italic white"),
+            "\n",
+            bar,
+            "\n",
+            Text(" [Space] Play/Pause  [←/→] +/-10s  [↑/↓] Volume  [C] Chapters  [1-5] Jump  [Q] Quit", style="dim")
+        ]
+        
+        if show_ch and chapters:
+            content.append("\n" + "-"*40)
+            content.append(Text(" 🔖 CHAPTERS:", style="bold yellow"))
+            for i, ch in enumerate(chapters[:9]):
+                mark = "👉" if chapter.endswith(ch["title"]) else "  "
+                content.append(Text(f"  {i+1}. {ch['title']} ({format_time(ch['start'])})", style="yellow" if mark == "👉" else "dim"))
+
+        return Panel(Text.assemble(*[c if isinstance(c, Text) else str(c) for c in content]), title="Chronicle Player", border_style="cyan")
+
+    # Keyboard handling (Windows/Unix)
+    def get_input():
+        if sys.platform == "win32":
+            import msvcrt
+            if msvcrt.kbhit():
+                ch = msvcrt.getch()
+                if ch == b' ': return "toggle"
+                if ch == b'q' or ch == b'Q': return "quit"
+                if ch == b'c' or ch == b'C': return "chapters"
+                if b'1' <= ch <= b'9': return f"jump_{ch.decode()}"
+                if ch == b'\xe0' or ch == b'\x00':
+                    ch2 = msvcrt.getch()
+                    if ch2 == b'H': return "vol_up"
+                    if ch2 == b'P': return "vol_down"
+                    if ch2 == b'K': return "back"
+                    if ch2 == b'M': return "forward"
+        return None
+
+    console.print(f"\n🎧 Starting playback: [bold cyan]{episode.display_title()}[/bold cyan]")
+    if start_pos > 0:
+        console.print(f"🕒 Resuming from {format_time(start_pos)}")
+
+    with Live(make_display(start_pos, volume, is_paused, get_current_chapter(start_pos), show_chapters_overlay), refresh_per_second=10) as live:
+        try:
+            while pygame.mixer.music.get_busy() or is_paused:
+                # Calculate absolute position
+                # get_pos() returns ms since start of play() call
+                rel_pos = pygame.mixer.music.get_pos() / 1000.0
+                abs_pos = current_offset + rel_pos if not is_paused else abs_pos_cached
+                
+                if not is_paused:
+                    abs_pos_cached = abs_pos
+                
+                # Input handling
+                action = get_input()
+                if action == "quit":
+                    break
+                elif action == "toggle":
+                    if is_paused:
+                        pygame.mixer.music.unpause()
+                        is_paused = False
+                    else:
+                        pygame.mixer.music.pause()
+                        is_paused = True
+                elif action == "forward":
+                    new_pos = min(abs_pos + 10, total_duration - 1)
+                    current_offset = new_pos
+                    pygame.mixer.music.play(0, new_pos)
+                    if is_paused: pygame.mixer.music.pause()
+                elif action == "back":
+                    new_pos = max(abs_pos - 10, 0)
+                    current_offset = new_pos
+                    pygame.mixer.music.play(0, new_pos)
+                    if is_paused: pygame.mixer.music.pause()
+                elif action == "vol_up":
+                    volume = min(volume + 0.1, 1.0)
+                    pygame.mixer.music.set_volume(volume)
+                elif action == "vol_down":
+                    volume = max(volume - 0.1, 0.0)
+                    pygame.mixer.music.set_volume(volume)
+                elif action == "chapters":
+                    show_chapters_overlay = not show_chapters_overlay
+                elif action and action.startswith("jump_"):
+                    idx = int(action.split("_")[1]) - 1
+                    if idx < len(chapters):
+                        new_pos = chapters[idx]["start"]
+                        current_offset = new_pos
+                        pygame.mixer.music.play(0, new_pos)
+                        if is_paused: pygame.mixer.music.pause()
+
+                live.update(make_display(abs_pos, volume, is_paused, get_current_chapter(abs_pos), show_chapters_overlay))
+                time.sleep(0.05)
+                
+                # Check for end of track
+                if not is_paused and not pygame.mixer.music.get_busy() and abs_pos < total_duration - 1:
+                    # Pygame music sometimes stops for no reason or buffer issues, but here likely end of file
+                    break
+                    
+        except KeyboardInterrupt:
+            pass
+        finally:
+            # Save state
+            rel_pos = pygame.mixer.music.get_pos() / 1000.0
+            final_pos = current_offset + rel_pos
+            episode.playback_position = round(final_pos, 2)
+            repo.update_entry(episode)
+            
+            pygame.mixer.music.stop()
+            pygame.mixer.quit()
+    
+    console.print(f"\n✅ Playback stopped at {format_time(final_pos)}. Position saved.")
 
 
 
@@ -1281,6 +1503,10 @@ Examples:
     gen_audio_parser = subparsers.add_parser("generate-audio", help="Generate full multispan audio with pauses and ID3 tags")
     gen_audio_parser.add_argument("--episode", type=int, required=True, help="Episode ID to narrate")
 
+    # Play command
+    play_parser = subparsers.add_parser("play", help="Play episode audio with CLI controls")
+    play_parser.add_argument("--episode", type=int, required=True, help="Episode ID to play")
+
     # Retry images command
     subparsers.add_parser("retry-images", help="Regenerate all placeholder images when Stable Diffusion is available")
     
@@ -1322,6 +1548,7 @@ def main():
         "retry-images": cmd_retry_images,
         "narrate": cmd_narrate,
         "generate-audio": cmd_generate_audio,
+        "play": cmd_play,
     }
     
     handler = commands.get(args.command)
