@@ -111,6 +111,97 @@ class AudioEpisodeGenerator:
 
         return final_path
 
+    def batch_generate_audio(self, episode_ids: List[int], force: bool = False, console: Optional[any] = None) -> Dict[str, Any]:
+        """
+        Batch generate audio for multiple episodes.
+        
+        Args:
+            episode_ids: List of episode IDs to process.
+            force: Re-generate even if audio already exists.
+            console: Rick console for progress reporting.
+            
+        Returns:
+            Summary report dictionary.
+        """
+        from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn
+        
+        total = len(episode_ids)
+        generated_count = 0
+        skipped_count = 0
+        failed_count = 0
+        total_duration = 0.0
+        total_size = 0
+        
+        start_time = time.time()
+        
+        # Queue management file
+        pause_file = Path("tmp/audio_gen.pause")
+        
+        def is_paused():
+            return pause_file.exists()
+
+        results = []
+        
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            TimeRemainingColumn(),
+            console=console,
+            transient=False
+        ) as progress:
+            task = progress.add_task("[cyan]Generating Audio Queue...", total=total)
+            
+            for ep_id in episode_ids:
+                # Check for pause
+                while is_paused():
+                    progress.update(task, description=f"[yellow]⏸️ Paused (Remove {pause_file} to resume)...[/yellow]")
+                    time.sleep(2)
+                
+                entry = self.repo.get_entry_by_id(ep_id)
+                if not entry:
+                    failed_count += 1
+                    progress.advance(task)
+                    continue
+
+                # Skip if already exists and not force
+                if entry.audio_path and os.path.exists(entry.audio_path) and not force:
+                    skipped_count += 1
+                    progress.update(task, description=f"[dim]Skipping {ep_id} (already exists)[/dim]")
+                    progress.advance(task)
+                    continue
+
+                progress.update(task, description=f"🎙️ Narrating {ep_id}: {entry.display_title()[:30]}...")
+                
+                try:
+                    path = self.generate_audio(ep_id)
+                    if path:
+                        generated_count += 1
+                        # Re-fetch entry to get updated duration/size
+                        updated = self.repo.get_entry_by_id(ep_id)
+                        total_duration += (updated.audio_duration or 0.0)
+                        total_size += (updated.audio_file_size or 0)
+                    else:
+                        failed_count += 1
+                except Exception as e:
+                    logger.error(f"Failed batch gen for {ep_id}: {e}")
+                    failed_count += 1
+                
+                progress.advance(task)
+
+        elapsed = time.time() - start_time
+        
+        return {
+            "total": total,
+            "generated": generated_count,
+            "skipped": skipped_count,
+            "failed": failed_count,
+            "total_duration_sec": total_duration,
+            "total_size_bytes": total_size,
+            "elapsed_sec": elapsed
+        }
+
     def _parse_sections(self, text: str) -> List[Dict]:
         """
         Parses text into a sequence of text blocks and pauses.

@@ -1114,19 +1114,68 @@ def cmd_generate_audio(args):
     from rich.console import Console
     console = Console()
     from .audio_generator import audio_generator
+    repo = get_repository()
     
-    episode_id = args.episode
-    console.print(f"[cyan]🎧 Generating full audio narrative for Episode {episode_id}...[/cyan]")
+    episode_ids = []
+    season_id = getattr(args, 'season', None)
     
-    try:
-        audio_path = audio_generator.generate_audio(episode_id)
-        if audio_path:
-            console.print(f"[bold green]✅ Success![/bold green] Audio episode generated successfully.")
-            console.print(f"📍 Path: [white]{audio_path}[/white]")
-        else:
-            console.print(f"[bold red]❌ Audio generation failed.[/bold red]")
-    except Exception as e:
-        console.print(f"[bold red]❌ Error: {str(e)}[/bold red]")
+    if season_id:
+        season = repo.get_season_by_id(season_id)
+        if not season:
+            console.print(f"[bold red]❌ Season {season_id} not found.[/bold red]")
+            return
+        
+        entries = repo.list_entries()
+        episode_ids = [e.id for e in entries if e.season_id == season_id]
+        # Sort by date
+        episode_ids.sort(key=lambda eid: repo.get_entry_by_id(eid).date)
+        
+        console.print(f"[cyan]🎧 Batch generating audio for Season {season_id}: [bold]{season.title}[/bold] ({len(episode_ids)} episodes)...[/cyan]")
+    else:
+        if not args.episode:
+            console.print("[bold red]❌ Either --episode or --season must be specified.[/bold red]")
+            return
+        episode_ids = [args.episode]
+
+    if not episode_ids:
+        console.print("[yellow]📭 No episodes found to process.[/yellow]")
+        return
+
+    # Call batch generator
+    report = audio_generator.batch_generate_audio(
+        episode_ids, 
+        force=getattr(args, 'force', False), 
+        console=console
+    )
+
+    # Summary Report
+    console.print(f"\n[bold green]🏁 Audio Generation Complete![/bold green]")
+    console.print("=" * 40)
+    console.print(f"📊 Summary:")
+    console.print(f"   ✅ Generated: [bold white]{report['generated']}[/bold white]")
+    console.print(f"   ⏩ Skipped:   [bold yellow]{report['skipped']}[/bold yellow]")
+    if report['failed'] > 0:
+        console.print(f"   ❌ Failed:    [bold red]{report['failed']}[/bold red]")
+    
+    if report['generated'] > 0:
+        # Duration formatting
+        hours, remainder = divmod(int(report['total_duration_sec']), 3600)
+        minutes, seconds = divmod(remainder, 60)
+        dur_str = f"{hours}h {minutes}m {seconds}s" if hours > 0 else f"{minutes}m {seconds}s"
+        
+        console.print(f"   🕒 Total Duration: [bold]{dur_str}[/bold]")
+        console.print(f"   💾 Total Size:     [bold]{report['total_size_bytes'] / (1024*1024):.2f} MB[/bold]")
+        console.print(f"   ⏱️  Time Elapsed:   [dim]{report['elapsed_sec']:.1f}s[/dim]")
+
+    # Playlist generation for seasons
+    if season_id and report['generated'] > 0:
+        from .audio_storage import audio_storage_manager
+        console.print(f"\n[cyan]🎵 Updating playlist for Season {season_id}...[/cyan]")
+        playlist_path = audio_storage_manager.generate_season_playlist(season_id)
+        if playlist_path:
+            console.print(f"   ✅ Playlist: [white]{playlist_path}[/white]")
+
+    console.print("=" * 40)
 
 
 def cmd_play(args):
@@ -1501,7 +1550,10 @@ Examples:
 
     # Generate Audio command
     gen_audio_parser = subparsers.add_parser("generate-audio", help="Generate full multispan audio with pauses and ID3 tags")
-    gen_audio_parser.add_argument("--episode", type=int, required=True, help="Episode ID to narrate")
+    gen_audio_group = gen_audio_parser.add_mutually_exclusive_group(required=True)
+    gen_audio_group.add_argument("--episode", type=int, help="Episode ID to narrate")
+    gen_audio_group.add_argument("--season", type=int, help="Season ID to narrate entire season")
+    gen_audio_parser.add_argument("--force", action="store_true", help="Force regeneration of existing audio")
 
     # Play command
     play_parser = subparsers.add_parser("play", help="Play episode audio with CLI controls")
