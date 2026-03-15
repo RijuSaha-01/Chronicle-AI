@@ -13,6 +13,8 @@ from typing import List, Dict, Optional, Tuple
 # Try to import pydub for audio manipulation
 try:
     from pydub import AudioSegment
+    from pydub.effects import normalize, compress_dynamic_range
+    from pydub.silence import detect_silence
     PYDUB_AVAILABLE = True
 except ImportError:
     PYDUB_AVAILABLE = False
@@ -28,6 +30,7 @@ except ImportError:
 from .models import Entry
 from .tts_engine import tts_engine
 from .repository import get_repository
+from .style_guide import CinematicStyleGuide
 
 logger = logging.getLogger(__name__)
 
@@ -46,8 +49,9 @@ class AudioEpisodeGenerator:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.repo = get_repository()
+        self.style_guide = CinematicStyleGuide()
 
-    def generate_audio(self, episode_id: int) -> Optional[str]:
+    def generate_audio(self, episode_id: int, quality_preset: str = "standard") -> Optional[str]:
         """
         Main method: generate_audio(episode_id) -> audio_path
         
@@ -80,6 +84,10 @@ class AudioEpisodeGenerator:
             logger.error("Failed to generate combined audio.")
             return None
 
+        # 2b. Apply audio optimizations
+        combined_audio = self._post_process(combined_audio, quality_preset)
+        total_duration = len(combined_audio) / 1000.0  # Update duration if silence was removed
+
         # 3. Save as MP3 to temporary location first
         temp_dir = Path("tmp/audio")
         temp_dir.mkdir(parents=True, exist_ok=True)
@@ -87,10 +95,11 @@ class AudioEpisodeGenerator:
         
         try:
             if PYDUB_AVAILABLE:
-                logger.info(f"💾 Exporting combined audio to temp: {temp_audio_path}...")
-                combined_audio.export(str(temp_audio_path), format="mp3", bitrate="192k")
+                bitrate = self.style_guide.styles.get("audio_quality", {}).get(quality_preset, "128k")
+                logger.info(f"💾 Exporting optimized audio ({bitrate}) to temp: {temp_audio_path}...")
+                combined_audio.export(str(temp_audio_path), format="mp3", bitrate=bitrate)
             else:
-                logger.error("pydub is required to export MP3 with pauses.")
+                logger.error("pydub is required to export MP3 with optimizations.")
                 return None
         except Exception as e:
             logger.error(f"Failed to export MP3: {e}")
@@ -111,13 +120,14 @@ class AudioEpisodeGenerator:
 
         return final_path
 
-    def batch_generate_audio(self, episode_ids: List[int], force: bool = False, console: Optional[any] = None) -> Dict[str, Any]:
+    def batch_generate_audio(self, episode_ids: List[int], force: bool = False, quality_preset: str = "standard", console: Optional[Any] = None) -> Dict[str, Any]:
         """
         Batch generate audio for multiple episodes.
         
         Args:
             episode_ids: List of episode IDs to process.
             force: Re-generate even if audio already exists.
+            quality_preset: 'standard', 'high', or 'compact'.
             console: Rick console for progress reporting.
             
         Returns:
@@ -175,7 +185,7 @@ class AudioEpisodeGenerator:
                 progress.update(task, description=f"🎙️ Narrating {ep_id}: {entry.display_title()[:30]}...")
                 
                 try:
-                    path = self.generate_audio(ep_id)
+                    path = self.generate_audio(ep_id, quality_preset=quality_preset)
                     if path:
                         generated_count += 1
                         # Re-fetch entry to get updated duration/size
@@ -265,6 +275,52 @@ class AudioEpisodeGenerator:
                     sequence.append({"type": "text", "text": para})
 
         return sequence
+
+    def _post_process(self, audio: 'AudioSegment', quality_preset: str = 'standard') -> 'AudioSegment':
+        """
+        Applies audio optimizations:
+        - Normalize levels (consistent volume)
+        - Light compression (better listening)
+        - Remove excessive silence (max 2 seconds)
+        - Subtle fade in/out
+        """
+        if not PYDUB_AVAILABLE:
+            return audio
+
+        logger.info(f"✨ Optimizing audio pipeline (preset: {quality_preset})...")
+
+        # 1. Remove excessive silence (max 2 seconds = 2000ms)
+        try:
+            silences = detect_silence(audio, min_silence_len=2000, silence_thresh=audio.dBFS - 16)
+            if silences:
+                # Process from end to start to maintain indices
+                new_audio = audio
+                for start, end in reversed(silences):
+                    silence_duration = end - start
+                    if silence_duration > 2000:
+                        # Cap silence at 2 seconds
+                        new_audio = new_audio[:start + 2000] + new_audio[end:]
+                audio = new_audio
+        except Exception as e:
+            logger.warning(f"Failed to strip silence: {e}")
+
+        # 2. Normalize audio levels
+        try:
+            audio = normalize(audio)
+        except Exception as e:
+            logger.warning(f"Failed to normalize audio: {e}")
+
+        # 3. Apply light compression
+        try:
+            # -20.0 threshold is a reasonable starting point for speech
+            audio = compress_dynamic_range(audio, threshold=-20.0, ratio=2.0)
+        except Exception as e:
+            logger.warning(f"Failed to apply compression: {e}")
+
+        # 4. Add subtle fade in/out (500ms)
+        audio = audio.fade_in(500).fade_out(500)
+
+        return audio
 
     def _synthesize_and_combine(self, sequence: List[Dict], entry: Entry) -> Tuple[Optional['AudioSegment'], float, List[Dict]]:
         """

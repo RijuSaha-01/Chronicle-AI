@@ -79,5 +79,10 @@
             "old books and dust",
             "faint woodsmoke"
         ]
+    },
+    "audio_quality": {
+        "standard": "128k",
+        "high": "192k",
+        "compact": "96k"
     }
 }

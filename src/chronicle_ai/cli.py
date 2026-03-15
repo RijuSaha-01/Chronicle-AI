@@ -1145,6 +1145,7 @@ def cmd_generate_audio(args):
     report = audio_generator.batch_generate_audio(
         episode_ids, 
         force=getattr(args, 'force', False), 
+        quality_preset=getattr(args, 'quality', 'standard'),
         console=console
     )
 
@@ -1554,6 +1555,8 @@ Examples:
     gen_audio_group.add_argument("--episode", type=int, help="Episode ID to narrate")
     gen_audio_group.add_argument("--season", type=int, help="Season ID to narrate entire season")
     gen_audio_parser.add_argument("--force", action="store_true", help="Force regeneration of existing audio")
+    gen_audio_parser.add_argument("--quality", choices=["standard", "high", "compact"], default="standard", 
+                               help="Quality preset (standard: 128k, high: 192k, compact: 96k)")
 
     # Play command
     play_parser = subparsers.add_parser("play", help="Play episode audio with CLI controls")
