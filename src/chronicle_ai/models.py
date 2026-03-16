@@ -281,6 +281,8 @@ class Entry:
     needs_image_retry: bool = False
     is_placeholder: bool = False
     
+
+    def to_dict(self) -> dict:
         return {
             "id": self.id,
             "date": self.date,
@@ -308,8 +310,13 @@ class Entry:
             "needs_image_retry": self.needs_image_retry,
             "is_placeholder": self.is_placeholder
         }
-    
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Entry":
+        if not data:
+            return None
         return cls(
+
             id=data.get("id"),
             date=data.get("date", date.today().isoformat()),
             raw_text=data.get("raw_text", ""),

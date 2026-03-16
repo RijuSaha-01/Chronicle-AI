@@ -8,7 +8,7 @@ import re
 import time
 import logging
 from pathlib import Path
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, Any
 
 # Try to import pydub for audio manipulation
 try:
