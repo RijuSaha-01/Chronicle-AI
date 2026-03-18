@@ -14,7 +14,6 @@ python-multipart>=0.0.6
 
 # Optional: Alternative HTTP client if httpx unavailable
 requests>=2.31.0
-
 # TTS Engine
 TTS>=0.22.0
 
@@ -23,3 +22,6 @@ mutagen>=1.47.0
 pydub>=0.25.1
 pygame>=2.5.2
 audioop-lts>=0.2.1  # Required for Python 3.13+
+
+# Vector search and storage
+chromadb>=0.4.0
