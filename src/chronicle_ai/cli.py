@@ -592,6 +592,46 @@ def cmd_batch_synopsis(args):
     console.print(f"\n[bold green]✅ Batch processing complete! {success_count}/{len(to_process)} episodes updated.[/bold green]")
 
 
+def cmd_embed(args):
+    """Handle the 'embed' command - generate and store embeddings."""
+    from .embedding_engine import get_embedding_engine
+    from .repository import get_repository
+    from rich.console import Console
+    
+    console = Console()
+    repo = get_repository()
+    
+    use_ollama = getattr(args, "ollama", False)
+    # Use specified model or default (different defaults for Ollama vs local)
+    default_model = "mxbai-embed-large" if use_ollama else "all-MiniLM-L6-v2"
+    model = args.model or default_model
+    
+    console.print(f"[bold cyan]🧠 Chronicle AI - Embedding Generation[/bold cyan]")
+    if use_ollama:
+        console.print(f"🤖 Engine: [bold]Ollama[/bold] ({model})")
+    else:
+        console.print(f"📦 Engine: [bold]Local Model[/bold] ({model})")
+        
+    engine = get_embedding_engine(model_name=model, use_ollama=use_ollama)
+    
+    if args.episode:
+        entry = repo.get_entry_by_id(args.episode)
+        if not entry:
+            console.print(f"[bold red]❌ Episode {args.episode} not found.[/bold red]")
+            return
+        
+        console.print(f"🧩 Embedding Episode {args.episode}: {entry.display_title()}...")
+        if engine.embed_episode(entry):
+            console.print("[bold green]✅ Episode embedded and stored in ChromaDB.[/bold green]")
+        else:
+            console.print("[bold red]❌ Failed to embed episode. Check if model is loaded correctly.[/bold red]")
+            
+    elif args.batch:
+        console.print("🚀 Batch processing all existing episodes...")
+        count = engine.batch_process_all(repo)
+        console.print(f"[bold green]✅ Finished! {count} episodes processed and stored in ChromaDB.[/bold green]")
+
+
 def cmd_process(args):
     """Handle the 'process' command - batch generate content for a date range."""
     repo = get_repository()
@@ -1057,54 +1097,53 @@ def cmd_narrate(args):
     from rich.console import Console
     console = Console()
     repo = get_repository()
-    from .tts_engine import tts_engine
-    
-    # Handle preview mode
-    if getattr(args, 'preview', False):
-        voice = (args.voice or "storyteller").upper()
-        console.print(f"[cyan]🎙️ Generating preview for voice profile: [bold]{voice}[/bold]...[/cyan]")
-        preview_path = tts_engine.preview(voice)
-        if preview_path:
-            console.print(f"[bold green]✅ Preview generated![/bold green] Play it at: [white]{preview_path}[/white]")
+    try:
+        from .tts_engine import tts_engine
+        
+        # Handle preview mode
+        if getattr(args, 'preview', False):
+            voice = (args.voice or "storyteller").upper()
+            console.print(f"[cyan]🎙️ Generating preview for voice profile: [bold]{voice}[/bold]...[/cyan]")
+            preview_path = tts_engine.preview(voice)
+            if preview_path:
+                console.print(f"[bold green]✅ Preview generated![/bold green] Play it at: [white]{preview_path}[/white]")
+            else:
+                console.print(f"[bold red]❌ Preview failed.[/bold red]")
+            return
+
+        episode_id = args.episode
+        entry = repo.get_entry_by_id(episode_id)
+        
+        if not entry:
+            console.print(f"[bold red]❌ Episode {episode_id} not found.[/bold red]")
+            return
+            
+        text = entry.narrative_text or entry.raw_text
+        if not text:
+            console.print(f"[bold red]❌ Episode {episode_id} has no text to narrate.[/bold red]")
+            return
+            
+        # Manual voice or auto-select based on mood
+        voice = args.voice
+        if not voice:
+            console.print(f"[dim]🔍 Auto-selecting voice based on mood: [bold]{entry.mood or 'default'}[/bold][/dim]")
+        
+        console.print(f"[cyan]🎙️ Narrating Episode {episode_id}...[/cyan]")
+        
+        filename = f"episode_{episode_id}.wav"
+        audio_path = tts_engine.generate(text, filename, voice_key=voice, mood=entry.mood)
+        
+        if audio_path:
+            entry.audio_path = audio_path
+            # Use the actual voice key used (could be auto-selected)
+            from .tts_client import NarratorTTS
+            entry.tts_voice = voice.upper() if voice else NarratorTTS.get_profile_for_mood(entry.mood)
+            repo.update_entry(entry)
+            console.print(f"[bold green]✅ Success![/bold green] Audio saved using [bold]{entry.tts_voice}[/bold] style.")
+            console.print(f"📍 Path: [white]{audio_path}[/white]")
         else:
-            console.print(f"[bold red]❌ Preview failed.[/bold red]")
-        return
-
-    episode_id = args.episode
-    entry = repo.get_entry_by_id(episode_id)
-    
-    if not entry:
-        console.print(f"[bold red]❌ Episode {episode_id} not found.[/bold red]")
-        return
-        
-    text = entry.narrative_text or entry.raw_text
-    if not text:
-        console.print(f"[bold red]❌ Episode {episode_id} has no text to narrate.[/bold red]")
-        return
-        
-    # Manual voice or auto-select based on mood
-    voice = args.voice
-    if not voice:
-        console.print(f"[dim]🔍 Auto-selecting voice based on mood: [bold]{entry.mood or 'default'}[/bold][/dim]")
-    
-    console.print(f"[cyan]🎙️ Narrating Episode {episode_id}...[/cyan]")
-    
-    filename = f"episode_{episode_id}.wav"
-    audio_path = tts_engine.generate(text, filename, voice_key=voice, mood=entry.mood)
-    
-    if audio_path:
-        entry.audio_path = audio_path
-        # Use the actual voice key used (could be auto-selected)
-        from .tts_client import NarratorTTS
-        entry.tts_voice = voice.upper() if voice else NarratorTTS.get_profile_for_mood(entry.mood)
-        repo.update_entry(entry)
-        console.print(f"[bold green]✅ Success![/bold green] Audio saved using [bold]{entry.tts_voice}[/bold] style.")
-        console.print(f"📍 Path: [white]{audio_path}[/white]")
-    else:
-        console.print(f"[bold red]❌ Narration failed.[/bold red]")
-        console.print("[dim]Hint: Make sure Coqui TTS is installed: pip install TTS[/dim]")
-
-
+            console.print(f"[bold red]❌ Narration failed.[/bold red]")
+            console.print("[dim]Hint: Make sure Coqui TTS is installed: pip install TTS[/dim]")
     except Exception as e:
         console.print(f"[bold red]❌ Error: {str(e)}[/bold red]")
 
@@ -1408,6 +1447,8 @@ Examples:
   chronicle-ai list --limit 5
   chronicle-ai view 1
   chronicle-ai export --weekly
+  chronicle-ai embed --batch
+  chronicle-ai embed --episode 1
         """
     )
     
@@ -1435,6 +1476,14 @@ Examples:
     # View command
     view_parser = subparsers.add_parser("view", help="View a single entry by ID")
     view_parser.add_argument("id", type=int, help="Entry ID to view")
+    
+    # Embed command
+    embed_parser = subparsers.add_parser("embed", help="Generate and store semantic embeddings for episodes")
+    embed_group = embed_parser.add_mutually_exclusive_group(required=True)
+    embed_group.add_argument("--episode", type=int, help="Single episode ID to embed")
+    embed_group.add_argument("--batch", action="store_true", help="Batch process all existing episodes")
+    embed_parser.add_argument("--ollama", action="store_true", help="Use Ollama's embedding endpoint instead of local models")
+    embed_parser.add_argument("--model", type=str, help="Specify embedding model name (sentence-transformers or ollama model name)")
     
     # Export command
     export_parser = subparsers.add_parser("export", help="Export entries to Markdown")
@@ -1604,6 +1653,7 @@ def main():
         "narrate": cmd_narrate,
         "generate-audio": cmd_generate_audio,
         "play": cmd_play,
+        "embed": cmd_embed,
     }
     
     handler = commands.get(args.command)

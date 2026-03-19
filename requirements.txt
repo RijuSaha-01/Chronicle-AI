@@ -25,3 +25,4 @@ audioop-lts>=0.2.1  # Required for Python 3.13+
 
 # Vector search and storage
 chromadb>=0.4.0
+sentence-transformers>=2.2.0
