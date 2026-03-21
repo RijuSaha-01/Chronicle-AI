@@ -632,6 +632,55 @@ def cmd_embed(args):
         console.print(f"[bold green]✅ Finished! {count} episodes processed and stored in ChromaDB.[/bold green]")
 
 
+def cmd_search(args):
+    """Handle the 'search' command - semantic search across episodes."""
+    from .semantic_search import get_semantic_search
+    from rich.console import Console
+    from rich.table import Table
+    from rich.panel import Panel
+    
+    console = Console()
+    search_engine = get_semantic_search()
+    
+    filters = {}
+    if args.start or args.end:
+        filters["date_range"] = [args.start, args.end]
+    if args.season:
+        filters["season"] = args.season
+    if args.mood:
+        filters["mood"] = args.mood
+    if args.themes:
+        filters["themes"] = args.themes
+        
+    console.print(f"[bold cyan]🔍 Chronicle Search:[/bold cyan] \"{args.query}\"")
+    
+    results = search_engine.search(args.query, limit=args.limit, filters=filters)
+    
+    if not results:
+        console.print("[yellow]📭 No relevant episodes found for this query.[/yellow]")
+        return
+        
+    console.print(f"✨ Found {len(results)} relevant chunks:\n")
+    
+    for i, res in enumerate(results, 1):
+        score_color = "green" if res['similarity_score'] > 0.7 else "yellow" if res['similarity_score'] > 0.4 else "red"
+        
+        # Format the highlighted text for Rich (convert **text** to [bold]text[/bold])
+        highlighted = res['highlighted_text'].replace("**", "[bold yellow]").replace("**", "[/bold yellow]")
+        
+        title = f"Episode {res['episode_id']} | {res['date']} | Score: [{score_color}]{res['similarity_score']:.2f}[/]"
+        
+        panel = Panel(
+            f"[dim]{res['section'].upper()}:[/]\n\n{highlighted}",
+            title=title,
+            title_align="left",
+            border_style="cyan"
+        )
+        console.print(panel)
+        console.print()
+
+
+
 def cmd_process(args):
     """Handle the 'process' command - batch generate content for a date range."""
     repo = get_repository()
@@ -1614,7 +1663,18 @@ Examples:
     # Retry images command
     subparsers.add_parser("retry-images", help="Regenerate all placeholder images when Stable Diffusion is available")
     
+    # Search command
+    search_parser = subparsers.add_parser("search", help="Perform semantic search across diary entries")
+    search_parser.add_argument("query", help="Search query (e.g., 'feeling overwhelmed at work')")
+    search_parser.add_argument("--limit", type=int, default=10, help="Max results to return")
+    search_parser.add_argument("--season", type=int, help="Filter by season ID")
+    search_parser.add_argument("--mood", help="Filter by mood")
+    search_parser.add_argument("--themes", help="Filter by themes")
+    search_parser.add_argument("--start", help="Start date (YYYY-MM-DD)")
+    search_parser.add_argument("--end", help="End date (YYYY-MM-DD)")
+    
     return parser
+
 
 
 def main():
@@ -1654,7 +1714,9 @@ def main():
         "generate-audio": cmd_generate_audio,
         "play": cmd_play,
         "embed": cmd_embed,
+        "search": cmd_search,
     }
+
     
     handler = commands.get(args.command)
     if handler:

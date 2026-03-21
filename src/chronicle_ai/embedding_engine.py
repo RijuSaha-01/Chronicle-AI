@@ -168,7 +168,10 @@ class EmbeddingEngine:
                     "section": section,
                     "timestamp": timestamp,
                     "date": episode.date,
-                    "chunk_index": i
+                    "chunk_index": i,
+                    "season_id": episode.season_id if episode.season_id is not None else -1,
+                    "mood": episode.mood or "unknown",
+                    "themes": ", ".join(episode.keywords) if episode.keywords else ""
                 })
                 ids.append(f"ep_{episode_id}_{section}_{i}")
         

@@ -78,6 +78,25 @@ class HealthResponse(BaseModel):
     entry_count: int
 
 
+class SearchResultResponse(BaseModel):
+    """Response schema for a single search result."""
+    episode_id: str
+    section: str
+    text_snippet: str
+    highlighted_text: str
+    similarity_score: float
+    date: str
+    mood: Optional[str] = None
+    metadata: dict
+
+
+class SearchListResponse(BaseModel):
+    """Response schema for search results."""
+    query: str
+    results: List[SearchResultResponse]
+    limit: int
+
+
 class ExportResponse(BaseModel):
     """Response schema for export operations."""
     success: bool
@@ -87,6 +106,8 @@ class ExportResponse(BaseModel):
 
 # =============================================================================
 # FastAPI Application
+
+
 # =============================================================================
 
 app = FastAPI(
@@ -265,6 +286,45 @@ async def list_entries(
         ],
         total=len(entries)
     )
+
+
+@app.get("/search", response_model=SearchListResponse)
+async def search_episodes(
+    q: str = Query(..., description="Search query"),
+    limit: int = Query(10, ge=1, le=50),
+    season: Optional[int] = Query(None),
+    mood: Optional[str] = Query(None),
+    themes: Optional[str] = Query(None),
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None)
+):
+    """
+    Perform semantic search across all episodes.
+    
+    Supports filtering by season, mood, themes, and date range.
+    """
+    from .semantic_search import get_semantic_search
+    
+    search_engine = get_semantic_search()
+    
+    filters = {}
+    if start_date or end_date:
+        filters["date_range"] = [start_date, end_date]
+    if season is not None:
+        filters["season"] = season
+    if mood:
+        filters["mood"] = mood
+    if themes:
+        filters["themes"] = themes
+        
+    results = search_engine.search(q, limit=limit, filters=filters)
+    
+    return SearchListResponse(
+        query=q,
+        results=[SearchResultResponse(**res) for res in results],
+        limit=limit
+    )
+
 
 
 @app.get("/entries/{entry_id}", response_model=EntryResponse)
