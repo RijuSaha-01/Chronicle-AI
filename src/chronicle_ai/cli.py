@@ -20,6 +20,7 @@ from .season_manager import SeasonManager
 from .director import director_engine
 from .cover_gen import cover_generator
 from .poster_gen import poster_generator
+from .memory_chat import get_memory_chat
 
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn
@@ -679,6 +680,40 @@ def cmd_search(args):
         console.print(panel)
         console.print()
 
+
+def cmd_ask(args):
+    """Handle the 'ask' command - conversational memory query."""
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.markdown import Markdown
+    
+    console = Console()
+    chat = get_memory_chat()
+    
+    console.print(f"[bold cyan]🎬 Chronicle AI - Conversational Memory Chat[/bold cyan]")
+    console.print(f"👂 Analyzing your history for: \"{args.question}\"...\n")
+    
+    if not is_ollama_available():
+        console.print("[yellow]⚠️  Ollama is offline. For best results, start Ollama to enable conversational reasoning.[/yellow]\n")
+        
+    response = chat.ask(args.question)
+    
+    # Display answer in a nice box
+    panel = Panel(
+        Markdown(response.answer),
+        title="[bold green]Answer[/bold green]",
+        title_align="left",
+        border_style="green",
+        padding=(1, 2)
+    )
+    console.print(panel)
+    
+    if response.sources and args.verbose:
+        console.print(f"\n[bold cyan]📚 Relevant Episodes Used:[/bold cyan]")
+        for i, src in enumerate(response.sources, 1):
+            console.print(f"  [{i}] Episode {src.get('episode_id')} ({src.get('date')}) - {src.get('similarity_score'):.2f} similarity")
+    
+    console.print()
 
 
 def cmd_process(args):
@@ -1673,6 +1708,11 @@ Examples:
     search_parser.add_argument("--start", help="Start date (YYYY-MM-DD)")
     search_parser.add_argument("--end", help="End date (YYYY-MM-DD)")
     
+    # Ask command
+    ask_parser = subparsers.add_parser("ask", help="Ask conversational questions about your history")
+    ask_parser.add_argument("question", help="Natural language question (e.g., 'When did I first mention the gym?')")
+    ask_parser.add_argument("--verbose", "-v", action="store_true", help="Show citation details")
+    
     return parser
 
 
@@ -1715,6 +1755,7 @@ def main():
         "play": cmd_play,
         "embed": cmd_embed,
         "search": cmd_search,
+        "ask": cmd_ask,
     }
 
     

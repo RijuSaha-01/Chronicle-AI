@@ -104,6 +104,17 @@ class ExportResponse(BaseModel):
     message: str
 
 
+class MemoryChatQuestion(BaseModel):
+    """Request body for memory chat."""
+    question: str
+
+
+class MemoryChatResponse(BaseModel):
+    """Response schema for memory chat."""
+    answer: str
+    sources: List[SearchResultResponse]
+
+
 # =============================================================================
 # FastAPI Application
 
@@ -325,6 +336,25 @@ async def search_episodes(
         limit=limit
     )
 
+
+@app.post("/ask", response_model=MemoryChatResponse)
+async def ask_memory(body: MemoryChatQuestion):
+    """
+    Ask a natural language question about the user's history.
+    """
+    from .memory_chat import get_memory_chat
+    
+    chat = get_memory_chat()
+    response = chat.ask(body.question)
+    
+    formatted_sources = []
+    for src in response.sources:
+        formatted_sources.append(SearchResultResponse(**src))
+        
+    return MemoryChatResponse(
+        answer=response.answer,
+        sources=formatted_sources
+    )
 
 
 @app.get("/entries/{entry_id}", response_model=EntryResponse)
