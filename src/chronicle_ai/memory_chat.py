@@ -20,7 +20,7 @@ class MemoryResponse(NamedTuple):
 
 class MemoryChat:
     """
-    Conversational interface for querying episodic memory.
+    Conversational interface for querying episodic memory with history.
     """
     
     def __init__(self, semantic_search=None, llm_client=None):
@@ -29,6 +29,13 @@ class MemoryChat:
         """
         self.search_engine = semantic_search or get_semantic_search()
         self.llm = llm_client or get_llm_client()
+        self.history: List[Dict[str, str]] = []
+        self.all_sources: List[Dict[str, Any]] = []
+
+    def clear(self):
+        """Reset conversation context."""
+        self.history = []
+        self.all_sources = []
 
     def ask(self, question: str) -> MemoryResponse:
         """
@@ -41,14 +48,13 @@ class MemoryChat:
             MemoryResponse containing the answer and citation sources.
         """
         # 1. Search for relevant context across episodes
-        # We use a slightly higher limit for better conversational context
+        # We increase context slightly for follow-up questions
         results = self.search_engine.search(question, limit=5)
         
-        if not results:
-            return MemoryResponse(
-                answer="I don't have any recorded memories related to that question. Could you provide more details or try a different search?",
-                sources=[]
-            )
+        # Track all unique sources in this session
+        for res in results:
+            if not any(s.get('episode_id') == res.get('episode_id') for s in self.all_sources):
+                self.all_sources.append(res)
 
         # 2. Build context string from search results
         context_str = ""
@@ -56,44 +62,59 @@ class MemoryChat:
             episode_id = res.get("episode_id", "Unknown")
             date = res.get("date", "Unknown Date")
             text = res.get("text_snippet", "")
+            title = res.get("title", "Untitled Episode")
             # Ensure we cite the source clearly for the LLM
-            context_str += f"--- MEMORY [{i+1}] ---\nEPISODE: {episode_id} ({date})\nCONTENT: {text}\n\n"
+            context_str += f"--- MEMORY [{i+1}] ---\nEPISODE {episode_id}: '{title}' ({date})\nCONTENT: {text}\n\n"
 
-        # 3. Construct the prompt for RAG
-        # We guide the LLM to use the citations and handle uncertainty
+        # 3. Format history for prompt (last 5 exchanges)
+        history_str = ""
+        for msg in self.history[-10:]: # 5 exchanges = 10 messages
+            role = "USER" if msg["role"] == "user" else "CHRONICLE"
+            history_str += f"{role}: {msg['content']}\n"
+
+        # 4. Construct the prompt for RAG
         system_prompt = (
             "You are 'Chronicle AI', a helpful and evocative conversational assistant. "
             "You have access to the user's personal history via recorded memory chunks. "
-            "Your goal is to answer questions about their life based ONLY on the provided context."
+            "Your goal is to answer questions about their life based on the provided context and history."
         )
         
-        prompt = f"""Use the following memory snippets to answer the user's question. 
+        prompt = f"""Use the following memory snippets and conversation history to answer the user's question. 
 
 ### INSTRUCTIONS:
 1. Always base your answer strictly on the provided memories.
 2. If the memories do not contain enough information to answer, say: "I don't know based on your recorded memories."
-3. Cite your sources by date or episode ID (e.g., "On 2024-03-15, you noted..." or "In Episode 42...").
-4. Maintain a supportive, cinematic tone, as if reflecting on a story.
+3. Cite your sources inline using the format [Episode ID: 'Title'] (e.g., "As mentioned in [Episode 23: 'The Turning Point'], you were...").
+4. If the user asks a follow-up, use the history to maintain context.
+5. Maintain a supportive, cinematic tone, as if reflecting on a story.
 
 ### MEMORY CONTEXT:
 {context_str}
 
-### USER QUESTION:
+### CONVERSATION HISTORY:
+{history_str}
+
+### CURRENT USER QUESTION:
 {question}
 
 ### CONVERSATIONAL ANSWER:"""
 
-        # 4. Generate the conversational response
+        # 5. Generate the conversational response
         try:
             answer = self.llm.generate(prompt, system_prompt=system_prompt)
             
             if not answer or len(answer.strip()) < 5:
                 # Basic fallback if LLM chain fails
-                return MemoryResponse(
-                    answer="I found some relevant memories, but I'm having trouble formulating a clear answer right now. You might want to check Episodes: " + 
-                           ", ".join([str(r.get('episode_id')) for r in results]),
-                    sources=results
-                )
+                answer = "I found some relevant memories, but I'm having trouble formulating a clear answer right now. You might want to check Episodes: " + \
+                         ", ".join([str(r.get('episode_id')) for r in results])
+                
+            # Update history
+            self.history.append({"role": "user", "content": question})
+            self.history.append({"role": "assistant", "content": answer})
+            
+            # Keep history to last 5 exchanges (10 messages)
+            if len(self.history) > 10:
+                self.history = self.history[-10:]
                 
             return MemoryResponse(answer=answer, sources=results)
             

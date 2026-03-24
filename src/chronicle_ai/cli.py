@@ -716,6 +716,69 @@ def cmd_ask(args):
     console.print()
 
 
+def cmd_chat(args):
+    """Handle the 'chat' command - interactive conversation mode."""
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.markdown import Markdown
+    from rich.text import Text
+    from rich.prompt import Prompt
+    
+    console = Console()
+    chat = get_memory_chat()
+    
+    console.print(Panel(
+        Text.from_markup("[bold cyan]🎬 Chronicle AI - Interactive Memory Chat[/bold cyan]\n"
+                         "[dim]Ask about your past, or use special commands:[/dim]\n"
+                         " [green]/sources[/green] - Show all cited episodes in this session\n"
+                         " [yellow]/clear[/yellow]   - Reset session context\n"
+                         " [red]quit[/red] or [red]Ctrl+C[/red] to exit"),
+        border_style="cyan",
+        padding=(1, 2)
+    ))
+    
+    if not is_ollama_available():
+        console.print("[yellow]⚠️  Ollama is offline. Starting Ollama is recommended for conversational mode.[/yellow]\n")
+
+    while True:
+        try:
+            user_input = Prompt.ask("\n[bold green]You[/bold green]")
+            
+            if user_input.lower() in ["quit", "exit", "stop"]:
+                console.print("\n[cyan]👋 Chronicle AI signing off. See you in the next scene![/cyan]\n")
+                break
+                
+            if not user_input.strip():
+                continue
+                
+            if user_input.strip() == "/clear":
+                chat.clear()
+                console.print("[yellow]✨ Session context cleared.[/yellow]")
+                continue
+                
+            if user_input.strip() == "/sources":
+                if not chat.all_sources:
+                    console.print("[dim]No episodes cited yet in this session.[/dim]")
+                else:
+                    console.print("\n[bold cyan]📚 Episodes cited in this session:[/bold cyan]")
+                    for src in chat.all_sources:
+                        console.print(f"  • Episode {src.get('episode_id')}: '{src.get('title')}' ({src.get('date')})")
+                continue
+
+            with console.status("[bold cyan]👂 Recalling...[/bold cyan]"):
+                response = chat.ask(user_input)
+            
+            # Print the answer with nice formatting
+            console.print("\n[bold cyan]Chronicle AI[/bold cyan]")
+            console.print(Markdown(response.answer))
+            
+        except KeyboardInterrupt:
+            console.print("\n\n[cyan]👋 Goodbye![/cyan]\n")
+            break
+        except Exception as e:
+            console.print(f"\n[bold red]❌ Error:[/bold red] {e}")
+
+
 def cmd_process(args):
     """Handle the 'process' command - batch generate content for a date range."""
     repo = get_repository()
@@ -1713,6 +1776,9 @@ Examples:
     ask_parser.add_argument("question", help="Natural language question (e.g., 'When did I first mention the gym?')")
     ask_parser.add_argument("--verbose", "-v", action="store_true", help="Show citation details")
     
+    # Chat command
+    subparsers.add_parser("chat", help="Start an interactive conversation with your memory")
+    
     return parser
 
 
@@ -1756,6 +1822,7 @@ def main():
         "embed": cmd_embed,
         "search": cmd_search,
         "ask": cmd_ask,
+        "chat": cmd_chat,
     }
 
     

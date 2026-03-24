@@ -130,6 +130,7 @@ class SemanticSearch:
                 "highlighted_text": self._highlight_concepts(doc, query),
                 "similarity_score": round(similarity_score, 4),
                 "date": meta.get("date"),
+                "title": meta.get("title", "Untitled Episode"),
                 "mood": meta.get("mood"),
                 "metadata": meta
             })

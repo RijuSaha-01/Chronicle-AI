@@ -168,6 +168,7 @@ class EmbeddingEngine:
                     "section": section,
                     "timestamp": timestamp,
                     "date": episode.date,
+                    "title": episode.title,
                     "chunk_index": i,
                     "season_id": episode.season_id if episode.season_id is not None else -1,
                     "mood": episode.mood or "unknown",
