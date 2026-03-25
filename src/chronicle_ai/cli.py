@@ -681,6 +681,7 @@ def cmd_search(args):
         console.print()
 
 
+
 def cmd_ask(args):
     """Handle the 'ask' command - conversational memory query."""
     from rich.console import Console
@@ -712,6 +713,56 @@ def cmd_ask(args):
         console.print(f"\n[bold cyan]📚 Relevant Episodes Used:[/bold cyan]")
         for i, src in enumerate(response.sources, 1):
             console.print(f"  [{i}] Episode {src.get('episode_id')} ({src.get('date')}) - {src.get('similarity_score'):.2f} similarity")
+    
+    console.print()
+
+
+def cmd_arc(args):
+    """Handle the 'arc' command - targeted story arc analysis."""
+    from .arc_analyzer import get_story_arc_analyzer
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.markdown import Markdown
+    from rich.table import Table
+    
+    console = Console()
+    analyzer = get_story_arc_analyzer()
+    
+    console.print(f"[bold cyan]🎬 Chronicle AI - Character Arc Analysis[/bold cyan]")
+    console.print(f"🧬 Analyzing arc for: [bold yellow]{args.topic}[/bold yellow] over [bold white]{args.time or 'all records'}[/bold white]...\n")
+    
+    if not is_ollama_available():
+        console.print("[yellow]⚠️  Ollama is offline. For best results, start Ollama to enable narrative synthesis.[/yellow]\n")
+        
+    with console.status("[bold cyan]🧶 Synthesizing narrative arc...[/bold cyan]"):
+        arc = analyzer.get_arc(args.topic, args.time or "all time")
+    
+    # 1. Narrative Section
+    console.print(Panel(
+        Markdown(arc.narrative),
+        title=f"[bold green]Narrative Arc: {args.topic}[/bold green]",
+        subtitle=f"[bold white]Transformation Score: {arc.progression_score}/10[/bold white]",
+        border_style="green",
+        padding=(1, 2)
+    ))
+    
+    # 2. Milestones Table
+    if arc.milestones:
+        console.print(f"\n[bold cyan]🏆 Key Milestones:[/bold cyan]")
+        table = Table(show_header=True, header_style="bold magenta", box=None)
+        table.add_column("Date", width=12)
+        table.add_column("Episode", width=30)
+        table.add_column("Significance")
+        
+        for m in arc.milestones:
+            table.add_row(
+                m.date,
+                f"[{m.episode_id}] {m.title}",
+                m.description
+            )
+        console.print(table)
+    else:
+        console.print("\n[yellow]📭 No significant milestones identified for this arc.[/yellow]")
     
     console.print()
 
@@ -1779,6 +1830,11 @@ Examples:
     # Chat command
     subparsers.add_parser("chat", help="Start an interactive conversation with your memory")
     
+    # Arc command
+    arc_parser = subparsers.add_parser("arc", help="Analyze character development for a specific topic")
+    arc_parser.add_argument("topic", help="The life topic to analyze (e.g., 'career', 'fitness')")
+    arc_parser.add_argument("--time", help="Time range (e.g., 'Season 1', 'Last Year')")
+    
     return parser
 
 
@@ -1823,6 +1879,7 @@ def main():
         "search": cmd_search,
         "ask": cmd_ask,
         "chat": cmd_chat,
+        "arc": cmd_arc,
     }
 
     

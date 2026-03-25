@@ -115,6 +115,23 @@ class MemoryChatResponse(BaseModel):
     sources: List[SearchResultResponse]
 
 
+class ArcMilestoneResponse(BaseModel):
+    """Response schema for a single arc milestone."""
+    episode_id: int
+    date: str
+    title: str
+    description: str
+
+
+class ArcSummaryResponse(BaseModel):
+    """Response schema for a full topic story arc."""
+    topic: str
+    time_range: str
+    narrative: str
+    milestones: List[ArcMilestoneResponse]
+    progression_score: float
+
+
 # =============================================================================
 # FastAPI Application
 
@@ -336,7 +353,6 @@ async def search_episodes(
         limit=limit
     )
 
-
 @app.post("/ask", response_model=MemoryChatResponse)
 async def ask_memory(body: MemoryChatQuestion):
     """
@@ -354,6 +370,30 @@ async def ask_memory(body: MemoryChatQuestion):
     return MemoryChatResponse(
         answer=response.answer,
         sources=formatted_sources
+    )
+
+
+@app.get("/arc", response_model=ArcSummaryResponse)
+async def get_story_arc(
+    topic: str = Query(..., description="The topic to analyze (e.g., 'career', 'fitness')"),
+    time_range: str = Query("all time", description="Time period for analysis")
+):
+    """
+    Generate a narrative arc analysis for a specific topic across records.
+    
+    Identifies progression, milestones, and provides a synthesized narrative.
+    """
+    from .arc_analyzer import get_story_arc_analyzer
+    
+    analyzer = get_story_arc_analyzer()
+    arc = analyzer.get_arc(topic, time_range)
+    
+    return ArcSummaryResponse(
+        topic=arc.topic,
+        time_range=arc.time_range,
+        narrative=arc.narrative,
+        milestones=[ArcMilestoneResponse(**m.to_dict()) for m in arc.milestones],
+        progression_score=arc.progression_score
     )
 
 

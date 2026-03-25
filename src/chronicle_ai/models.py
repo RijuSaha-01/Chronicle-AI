@@ -94,6 +94,65 @@ class CoverMetadata:
 
 
 @dataclass
+class ArcMilestone:
+    """
+    A key moment in a character's story arc.
+    """
+    episode_id: int
+    date: str
+    title: str
+    description: str
+
+    def to_dict(self) -> dict:
+        return {
+            "episode_id": self.episode_id,
+            "date": self.date,
+            "title": self.title,
+            "description": self.description
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "ArcMilestone":
+        return cls(
+            episode_id=data.get("episode_id"),
+            date=data.get("date"),
+            title=data.get("title"),
+            description=data.get("description")
+        )
+
+
+@dataclass
+class ArcSummary:
+    """
+    Summary of a character's development over a specific topic and time range.
+    """
+    topic: str
+    time_range: str
+    narrative: str
+    milestones: List[ArcMilestone] = field(default_factory=list)
+    progression_score: float = 0.0  # 1-10 for growth/change
+
+    def to_dict(self) -> dict:
+        return {
+            "topic": self.topic,
+            "time_range": self.time_range,
+            "narrative": self.narrative,
+            "milestones": [m.to_dict() for m in self.milestones],
+            "progression_score": self.progression_score
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "ArcSummary":
+        return cls(
+            topic=data.get("topic"),
+            time_range=data.get("time_range"),
+            narrative=data.get("narrative"),
+            milestones=[ArcMilestone.from_dict(m) for m in data.get("milestones", [])],
+            progression_score=data.get("progression_score", 0.0)
+        )
+
+
+@dataclass
 class SeasonArc:
     """
     Detailed narrative analysis of a season's arc.
