@@ -148,7 +148,7 @@ class EmbeddingEngine:
             "narrative": episode.narrative_text,
             "synopsis": episode.synopsis,
             "title": episode.title,
-            "themes": ", ".join(episode.keywords) if episode.keywords else ""
+            "themes": ", ".join(episode.themes if episode.themes else episode.keywords)
         }
         
         # Prepare storage lists
@@ -170,9 +170,9 @@ class EmbeddingEngine:
                     "date": episode.date,
                     "title": episode.title,
                     "chunk_index": i,
-                    "season_id": episode.season_id if episode.season_id is not None else -1,
+                    "season_id": int(episode.season_id) if episode.season_id is not None else -1,
                     "mood": episode.mood or "unknown",
-                    "themes": ", ".join(episode.keywords) if episode.keywords else ""
+                    "themes": ", ".join(episode.themes if episode.themes else episode.keywords)
                 })
                 ids.append(f"ep_{episode_id}_{section}_{i}")
         

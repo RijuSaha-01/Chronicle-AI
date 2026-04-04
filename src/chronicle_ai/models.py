@@ -199,6 +199,7 @@ class Season:
     end_date: str = ""
     episode_count: int = 0
     dominant_themes: List[str] = field(default_factory=list)
+    themes: List[str] = field(default_factory=list)
     description: str = ""
     mode: str = "default"  # default, smart, manual
     arc_analysis: Optional[SeasonArc] = None
@@ -213,6 +214,7 @@ class Season:
             "end_date": self.end_date,
             "episode_count": self.episode_count,
             "dominant_themes": self.dominant_themes,
+            "themes": self.themes,
             "description": self.description,
             "mode": self.mode,
             "arc_analysis": self.arc_analysis.to_dict() if self.arc_analysis else None,
@@ -231,6 +233,7 @@ class Season:
             end_date=data.get("end_date", ""),
             episode_count=data.get("episode_count", 0),
             dominant_themes=data.get("dominant_themes", []),
+            themes=data.get("themes", []),
             description=data.get("description", ""),
             mode=data.get("mode", "default"),
             arc_analysis=SeasonArc.from_dict(data.get("arc_analysis")) if data.get("arc_analysis") else None,
@@ -324,6 +327,7 @@ class Entry:
     logline: Optional[str] = None
     synopsis: Optional[str] = None
     keywords: List[str] = field(default_factory=list)
+    themes: List[str] = field(default_factory=list)
     recap_id: Optional[int] = None
     season_id: Optional[int] = None
     cover_art_path: Optional[str] = None
@@ -352,6 +356,7 @@ class Entry:
             "logline": self.logline,
             "synopsis": self.synopsis,
             "keywords": self.keywords,
+            "themes": self.themes,
             "conflict_data": self.conflict_data.to_dict() if self.conflict_data else None,
             "recap_id": self.recap_id,
             "season_id": self.season_id,
@@ -385,6 +390,7 @@ class Entry:
             logline=data.get("logline"),
             synopsis=data.get("synopsis"),
             keywords=data.get("keywords", []),
+            themes=data.get("themes", []),
             conflict_data=ConflictAnalysis.from_dict(data.get("conflict_data")) if data.get("conflict_data") else None,
             recap_id=data.get("recap_id"),
             season_id=data.get("season_id"),

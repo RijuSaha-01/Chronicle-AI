@@ -78,7 +78,12 @@ class SemanticSearch:
                 
             # Themes filter (ChromaDB supports $contains for strings in metadata)
             if "themes" in filters and filters["themes"]:
-                conditions.append({"themes": {"$contains": filters["themes"]}})
+                theme_val = filters["themes"]
+                if isinstance(theme_val, list):
+                    for t in theme_val:
+                        conditions.append({"themes": {"$contains": t}})
+                else:
+                    conditions.append({"themes": {"$contains": theme_val}})
 
             if len(conditions) > 1:
                 where["$and"] = conditions

@@ -14,7 +14,7 @@ from .models import Entry, ConflictAnalysis, Recap, Season, SeasonArc
 
 
 # All columns for the diary_entries table to ensure consistency in SELECT queries
-ENTRY_COLUMNS = "id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style, needs_image_retry, is_placeholder, audio_duration, audio_path, audio_file_size, audio_generation_date"
+ENTRY_COLUMNS = "id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, themes, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style, needs_image_retry, is_placeholder, audio_duration, audio_path, audio_file_size, audio_generation_date"
 
 
 # Default database location (can be overridden via environment variable)
@@ -76,6 +76,8 @@ class EntryRepository:
                 cursor.execute("ALTER TABLE diary_entries ADD COLUMN synopsis TEXT")
             if 'keywords' not in columns:
                 cursor.execute("ALTER TABLE diary_entries ADD COLUMN keywords TEXT")
+            if 'themes' not in columns:
+                cursor.execute("ALTER TABLE diary_entries ADD COLUMN themes TEXT")
             if 'cover_art_path' not in columns:
                 cursor.execute("ALTER TABLE diary_entries ADD COLUMN cover_art_path TEXT")
             if 'image_variants' not in columns:
@@ -122,6 +124,7 @@ class EntryRepository:
                         end_date TEXT NOT NULL,
                         episode_count INTEGER DEFAULT 0,
                         dominant_themes TEXT,
+                        themes TEXT,
                         description TEXT,
                         mode TEXT DEFAULT 'default',
                         arc_analysis TEXT,
@@ -139,6 +142,8 @@ class EntryRepository:
                     cursor.execute("ALTER TABLE seasons ADD COLUMN poster_path TEXT")
                 if 'poster_variants' not in season_columns:
                     cursor.execute("ALTER TABLE seasons ADD COLUMN poster_variants TEXT")
+                if 'themes' not in season_columns:
+                    cursor.execute("ALTER TABLE seasons ADD COLUMN themes TEXT")
 
             # Create settings table if it doesn't exist
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='settings'")
@@ -166,6 +171,7 @@ class EntryRepository:
                     logline TEXT,
                     synopsis TEXT,
                     keywords TEXT,
+                    themes TEXT,
                     conflict_data TEXT,
                     recap_id INTEGER,
                     season_id INTEGER,
@@ -198,6 +204,7 @@ class EntryRepository:
                     end_date TEXT NOT NULL,
                     episode_count INTEGER DEFAULT 0,
                     dominant_themes TEXT,
+                    themes TEXT,
                     description TEXT,
                     mode TEXT DEFAULT 'default',
                     arc_analysis TEXT
@@ -249,8 +256,8 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            """INSERT INTO diary_entries (date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style, needs_image_retry, is_placeholder, audio_duration, audio_path, audio_file_size, audio_generation_date) 
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO diary_entries (date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, themes, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style, needs_image_retry, is_placeholder, audio_duration, audio_path, audio_file_size, audio_generation_date) 
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 entry.date, 
                 entry.raw_text, 
@@ -260,6 +267,7 @@ class EntryRepository:
                 entry.logline,
                 entry.synopsis,
                 json.dumps(entry.keywords) if entry.keywords else None,
+                json.dumps(entry.themes) if entry.themes else None,
                 json.dumps(entry.conflict_data.to_dict()) if entry.conflict_data else None,
                 entry.recap_id,
                 entry.season_id,
@@ -301,7 +309,7 @@ class EntryRepository:
         
         cursor.execute(
             """UPDATE diary_entries 
-               SET date = ?, raw_text = ?, narrative_text = ?, title = ?, title_options = ?, logline = ?, synopsis = ?, keywords = ?, conflict_data = ?, recap_id = ?, season_id = ?, cover_art_path = ?, image_variants = ?, cover_history = ?, mood = ?, style = ?, needs_image_retry = ?, is_placeholder = ?, audio_duration = ?, audio_path = ?, audio_file_size = ?, audio_generation_date = ?
+               SET date = ?, raw_text = ?, narrative_text = ?, title = ?, title_options = ?, logline = ?, synopsis = ?, keywords = ?, themes = ?, conflict_data = ?, recap_id = ?, season_id = ?, cover_art_path = ?, image_variants = ?, cover_history = ?, mood = ?, style = ?, needs_image_retry = ?, is_placeholder = ?, audio_duration = ?, audio_path = ?, audio_file_size = ?, audio_generation_date = ?
                WHERE id = ?""",
             (
                 entry.date, 
@@ -312,6 +320,7 @@ class EntryRepository:
                 entry.logline,
                 entry.synopsis,
                 json.dumps(entry.keywords) if entry.keywords else None,
+                json.dumps(entry.themes) if entry.themes else None,
                 json.dumps(entry.conflict_data.to_dict()) if entry.conflict_data else None,
                 entry.recap_id,
                 entry.season_id,
@@ -363,6 +372,8 @@ class EntryRepository:
                 data["title_options"] = json.loads(data["title_options"])
             if data.get("keywords"):
                 data["keywords"] = json.loads(data["keywords"])
+            if data.get("themes"):
+                data["themes"] = json.loads(data["themes"])
             if data.get("image_variants"):
                 data["image_variants"] = json.loads(data["image_variants"])
             if data.get("cover_history"):
@@ -400,6 +411,8 @@ class EntryRepository:
                 data["title_options"] = json.loads(data["title_options"])
             if data.get("keywords"):
                 data["keywords"] = json.loads(data["keywords"])
+            if data.get("themes"):
+                data["themes"] = json.loads(data["themes"])
             if data.get("image_variants"):
                 data["image_variants"] = json.loads(data["image_variants"])
             if data.get("cover_history"):
@@ -453,6 +466,8 @@ class EntryRepository:
                 data["title_options"] = json.loads(data["title_options"])
             if data.get("keywords"):
                 data["keywords"] = json.loads(data["keywords"])
+            if data.get("themes"):
+                data["themes"] = json.loads(data["themes"])
             if data.get("image_variants"):
                 data["image_variants"] = json.loads(data["image_variants"])
             if data.get("cover_history"):
@@ -562,6 +577,8 @@ class EntryRepository:
                 data["title_options"] = json.loads(data["title_options"])
             if data.get("keywords"):
                 data["keywords"] = json.loads(data["keywords"])
+            if data.get("themes"):
+                data["themes"] = json.loads(data["themes"])
             if data.get("image_variants"):
                 data["image_variants"] = json.loads(data["image_variants"])
             if data.get("cover_history"):
@@ -657,14 +674,15 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            """INSERT INTO seasons (title, start_date, end_date, episode_count, dominant_themes, description, mode, arc_analysis, poster_path, poster_variants) 
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO seasons (title, start_date, end_date, episode_count, dominant_themes, themes, description, mode, arc_analysis, poster_path, poster_variants) 
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 season.title,
                 season.start_date,
                 season.end_date,
                 season.episode_count,
                 json.dumps(season.dominant_themes),
+                json.dumps(season.themes),
                 season.description,
                 season.mode,
                 json.dumps(season.arc_analysis.to_dict()) if season.arc_analysis else None,
@@ -689,7 +707,7 @@ class EntryRepository:
         
         cursor.execute(
             """UPDATE seasons 
-               SET title = ?, start_date = ?, end_date = ?, episode_count = ?, dominant_themes = ?, description = ?, mode = ?, arc_analysis = ?, poster_path = ?, poster_variants = ?
+               SET title = ?, start_date = ?, end_date = ?, episode_count = ?, dominant_themes = ?, themes = ?, description = ?, mode = ?, arc_analysis = ?, poster_path = ?, poster_variants = ?
                WHERE id = ?""",
             (
                 season.title,
@@ -697,6 +715,7 @@ class EntryRepository:
                 season.end_date,
                 season.episode_count,
                 json.dumps(season.dominant_themes),
+                json.dumps(season.themes),
                 season.description,
                 season.mode,
                 json.dumps(season.arc_analysis.to_dict()) if season.arc_analysis else None,
@@ -716,7 +735,7 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            "SELECT id, title, start_date, end_date, episode_count, dominant_themes, description, mode, arc_analysis, poster_path, poster_variants FROM seasons WHERE id = ?",
+            "SELECT id, title, start_date, end_date, episode_count, dominant_themes, themes, description, mode, arc_analysis, poster_path, poster_variants FROM seasons WHERE id = ?",
             (season_id,)
         )
         row = cursor.fetchone()
@@ -738,7 +757,7 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            "SELECT id, title, start_date, end_date, episode_count, dominant_themes, description, mode, arc_analysis, poster_path, poster_variants FROM seasons ORDER BY start_date DESC"
+            "SELECT id, title, start_date, end_date, episode_count, dominant_themes, themes, description, mode, arc_analysis, poster_path, poster_variants FROM seasons ORDER BY start_date DESC"
         )
         rows = cursor.fetchall()
         conn.close()
@@ -761,7 +780,7 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            "SELECT id, title, start_date, end_date, episode_count, dominant_themes, description, mode, arc_analysis, poster_path, poster_variants FROM seasons WHERE start_date <= ? AND end_date >= ?",
+            "SELECT id, title, start_date, end_date, episode_count, dominant_themes, themes, description, mode, arc_analysis, poster_path, poster_variants FROM seasons WHERE start_date <= ? AND end_date >= ?",
             (target_date, target_date)
         )
         row = cursor.fetchone()

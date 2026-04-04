@@ -366,6 +366,7 @@ Analyze the following diary entry and produce a complete episode package.
 2. NARRATIVES: Write a 2-4 sentence cinematic narrative in third person, present tense. Use identified conflicts to drive the structure.
 3. TITLES: Generate 5 title options with these patterns: 'The One Where...', Single evocative word, Reference, Metaphorical, Direct dramatic. Include relevance scores (0.0-1.0).
 4. METADATA: Provide a 1-sentence logline, a 2-3 sentence synopsis, and exactly 5 keywords.
+5. THEMES: Pick any of the following themes that apply: work, health, relationships, growth, conflict, creativity. Also suggest 2 other relevant themes not in this list.
 
 Diary entry:
 {entry.raw_text}
@@ -374,7 +375,8 @@ IMPORTANT: Output ONLY a raw JSON object with these keys:
 'conflict' (object with internal_conflicts, external_conflicts, tension_level, archetype, central_conflict),
 'narrative' (string),
 'titles' (list of objects with title, pattern, score),
-'metadata' (object with logline, synopsis, keywords).
+'metadata' (object with logline, synopsis, keywords),
+'themes' (list of strings).
 """
 
     # Apply cinematic style guide to the prompt
@@ -430,6 +432,9 @@ IMPORTANT: Output ONLY a raw JSON object with these keys:
                 entry.synopsis = meta.get('synopsis', '')
                 entry.keywords = meta.get('keywords', [])
                 
+                # 5. Themes
+                entry.themes = data.get('themes', [])
+                
                 # Cache the successful result
                 director_engine.cache.set(cache_key, data)
                 return
@@ -470,3 +475,4 @@ def _populate_entry_from_data(entry, data: Dict) -> None:
     entry.logline = meta.get('logline', '')
     entry.synopsis = meta.get('synopsis', '')
     entry.keywords = meta.get('keywords', [])
+    entry.themes = data.get('themes', [])

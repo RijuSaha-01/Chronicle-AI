@@ -21,6 +21,7 @@ from .director import director_engine
 from .cover_gen import cover_generator
 from .poster_gen import poster_generator
 from .memory_chat import get_memory_chat
+from .themes import theme_manager
 
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn
@@ -183,6 +184,102 @@ def cmd_list(args):
         print(f"   📝 {snippet}")
     
     print("\n" + "=" * 60)
+    
+
+def cmd_episodes(args):
+    """Handle the 'episodes' command - show and group episodes, optionally by theme."""
+    repo = get_repository()
+    
+    if args.theme:
+        from rich.table import Table
+        from rich.console import Console
+        from rich.panel import Panel
+        from rich.columns import Columns
+        
+        console = Console()
+        theme = args.theme.lower()
+        episodes = theme_manager.get_episodes_by_theme(theme)
+        
+        console.print(f"\n🎬 [bold cyan]Chronicle Episodes: Theme - {theme.upper()}[/bold cyan]")
+        console.print("-" * 60)
+        
+        if not episodes:
+            console.print(f"📭 No episodes found with theme '[yellow]{theme}[/yellow]'.")
+            return
+            
+        # Statistics
+        total = len(episodes)
+        seasons_data = {}
+        for ep in episodes:
+            season_id = ep.season_id or "N/A"
+            seasons_data[season_id] = seasons_data.get(season_id, 0) + 1
+            
+        console.print(f"📈 Found {total} episodes about [bold]{theme}[/bold].")
+        for s_id, count in seasons_data.items():
+            s_name = f"Season {s_id}" if isinstance(s_id, int) else "Unassigned"
+            console.print(f"   - {count} episodes in {s_name}")
+            
+        # Related Themes
+        related = theme_manager.suggest_related_themes(theme)
+        if related:
+            console.print(f"\n💡 Related themes found in these episodes: [bold magenta]{', '.join(related)}[/bold magenta]")
+        
+        console.print("\n" + "=" * 60)
+        
+        # Display episodes
+        for ep in episodes:
+            console.print(f"\n📅 [{ep.date}] (ID: {ep.id})")
+            console.print(f"   🎬 [bold white]{ep.display_title()}[/bold white]")
+            if ep.logline:
+                console.print(f"   💡 {ep.logline}")
+            tags = ", ".join(ep.themes + [k for k in ep.keywords if k not in ep.themes])
+            console.print(f"   🏷️  {tags}")
+            console.print(f"   📝 {ep.snippet(100)}")
+            
+        console.print("\n" + "=" * 60)
+    else:
+        # Fallback to list
+        cmd_list(args)
+
+
+def cmd_theme_showcase(args):
+    """Handle the 'theme-showcase' command - show distribution across seasons."""
+    from rich.console import Console
+    from rich.table import Table
+    from rich.chart import BarChart
+    
+    console = Console()
+    stats = theme_manager.get_theme_stats()
+    
+    console.print(Panel("[bold cyan]🎬 Chronicle AI - Theme Distribution Across Seasons[/bold cyan]", border_style="cyan"))
+    
+    table = Table(show_header=True, header_style="bold magenta", box=None)
+    table.add_column("Theme", width=15)
+    
+    # Get all seasons mentioned
+    all_seasons = set()
+    for theme, data in stats.items():
+        for s in data.keys():
+            if s != "Total":
+                all_seasons.add(s)
+    
+    sorted_seasons = sorted(list(all_seasons))
+    for s in sorted_seasons:
+        table.add_column(s, width=12, justify="center")
+    table.add_column("Total", width=10, justify="center", style="bold")
+    
+    for theme in theme_manager.ALLOWED_THEMES:
+        row = [theme.capitalize()]
+        data = stats.get(theme, {})
+        for s in sorted_seasons:
+            count = data.get(s, 0)
+            row.append(str(count) if count > 0 else "·")
+        row.append(str(data.get("Total", 0)))
+        table.add_row(*row)
+        
+    console.print(table)
+    console.print("\n[dim]Tip: Use 'chronicle episodes --theme [NAME]' to explore specific content.[/dim]")
+    
 
 
 def cmd_view(args):
@@ -1671,6 +1768,14 @@ Examples:
     list_parser = subparsers.add_parser("list", help="List recent entries")
     list_parser.add_argument("--limit", "-n", type=int, default=10, help="Number of entries to show (default: 10)")
     
+    # Episodes command
+    episodes_parser = subparsers.add_parser("episodes", help="List and group episodes by theme")
+    episodes_parser.add_argument("--theme", type=str, help="Filter and group episodes by specific thematic element")
+    episodes_parser.add_argument("--limit", "-n", type=int, default=10, help="Number of entries to show (default: 10)")
+    
+    # Theme Showcase command
+    subparsers.add_parser("theme-showcase", help="Display theme distribution across all seasons")
+    
     # View command
     view_parser = subparsers.add_parser("view", help="View a single entry by ID")
     view_parser.add_argument("id", type=int, help="Entry ID to view")
@@ -1880,6 +1985,8 @@ def main():
         "ask": cmd_ask,
         "chat": cmd_chat,
         "arc": cmd_arc,
+        "episodes": cmd_episodes,
+        "theme-showcase": cmd_theme_showcase,
     }
 
     
