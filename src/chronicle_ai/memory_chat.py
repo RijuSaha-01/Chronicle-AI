@@ -5,7 +5,11 @@ Answers natural language questions about the user's history using RAG.
 """
 
 import logging
-from typing import List, Dict, Any, Optional, NamedTuple
+import re
+from typing import List, Dict, Any, Optional, NamedTuple, Tuple
+from datetime import datetime, timedelta
+import dateparser
+from dateparser.search import search_dates
 from .semantic_search import get_semantic_search
 from .llm_client import get_llm_client
 
@@ -37,6 +41,67 @@ class MemoryChat:
         self.history = []
         self.all_sources = []
 
+    def _extract_time_ranges(self, question: str) -> List[Tuple[str, str]]:
+        """
+        Parses natural language from the question to find one or more date ranges.
+        
+        Returns:
+            List of Tuples of (start_date_str, end_date_str) in ISO format (YYYY-MM-DD).
+        """
+        now = datetime.now()
+        found_dates = search_dates(question, settings={'PREFER_DATES_FROM': 'past', 'RELATIVE_BASE': now})
+        
+        if not found_dates:
+            return []
+        
+        ranges = []
+        q_lower = question.lower()
+        
+        # Handle "week before [date]" or "month before [date]"
+        before_match = re.search(r'(week|month|year)\s+before', q_lower)
+        
+        for parsed_str, dt in found_dates:
+            start_date = dt
+            end_date = dt
+            
+            p_lower = parsed_str.lower()
+            
+            # Determine base range granularity
+            if "week" in p_lower or "week" in q_lower:
+                start_date = dt - timedelta(days=dt.weekday())
+                end_date = start_date + timedelta(days=6)
+            elif any(m in p_lower or m in q_lower for m in ["month", "january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"]):
+                start_date = dt.replace(day=1)
+                next_month = dt.month % 12 + 1
+                curr_year = dt.year + (dt.month // 12 if next_month == 1 else 0)
+                end_date = dt.replace(month=next_month, year=curr_year, day=1) - timedelta(days=1)
+            elif "year" in p_lower or "year" in q_lower:
+                start_date = dt.replace(month=1, day=1)
+                end_date = dt.replace(month=12, day=31)
+            
+            # Adjust if "before" is specified
+            if before_match:
+                unit = before_match.group(1)
+                if unit == "week":
+                    end_date = start_date - timedelta(days=1)
+                    start_date = end_date - timedelta(days=6)
+                elif unit == "month":
+                    end_date = start_date - timedelta(days=1)
+                    start_date = end_date.replace(day=1)
+                elif unit == "year":
+                    end_date = start_date - timedelta(days=1)
+                    start_date = end_date.replace(month=1, day=1, year=end_date.year) # simplified
+            
+            ranges.append((start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d")))
+
+        # Deduplicate ranges
+        unique_ranges = []
+        for r in ranges:
+            if r not in unique_ranges:
+                unique_ranges.append(r)
+        
+        return unique_ranges
+
     def ask(self, question: str) -> MemoryResponse:
         """
         Analyse a question, retrieve relevant memories, and generate an answer.
@@ -48,8 +113,30 @@ class MemoryChat:
             MemoryResponse containing the answer and citation sources.
         """
         # 1. Search for relevant context across episodes
-        # We increase context slightly for follow-up questions
-        results = self.search_engine.search(question, limit=5)
+        # Detect time ranges from the question
+        time_ranges = self._extract_time_ranges(question)
+        
+        results = []
+        if time_ranges:
+            # If multiple ranges (e.g. comparison), search each
+            for start, end in time_ranges:
+                logger.info(f"Timeline search detected: {start} to {end}")
+                # We search for the question within that range
+                range_results = self.search_engine.search(question, limit=3, filters={"date_range": [start, end]})
+                results.extend(range_results)
+        else:
+            # Normal search
+            results = self.search_engine.search(question, limit=5)
+        
+        # Deduplicate results by episode_id and section
+        seen = set()
+        unique_results = []
+        for res in results:
+            key = (res.get("episode_id"), res.get("section"))
+            if key not in seen:
+                unique_results.append(res)
+                seen.add(key)
+        results = unique_results[:7] # Limit total context chunks
         
         # Track all unique sources in this session
         for res in results:
