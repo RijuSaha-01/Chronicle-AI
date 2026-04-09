@@ -341,6 +341,9 @@ class Entry:
     tts_voice: Optional[str] = None
     mood: Optional[str] = None
     style: Optional[str] = None
+    characters: List[str] = field(default_factory=list)
+    locations: List[str] = field(default_factory=list)
+    cluster_label: Optional[str] = None
     needs_image_retry: bool = False
     is_placeholder: bool = False
     
@@ -371,6 +374,9 @@ class Entry:
             "tts_voice": self.tts_voice,
             "mood": self.mood,
             "style": self.style,
+            "characters": self.characters,
+            "locations": self.locations,
+            "cluster_label": self.cluster_label,
             "needs_image_retry": self.needs_image_retry,
             "is_placeholder": self.is_placeholder
         }
@@ -405,6 +411,9 @@ class Entry:
             tts_voice=data.get("tts_voice"),
             mood=data.get("mood"),
             style=data.get("style"),
+            characters=data.get("characters", []),
+            locations=data.get("locations", []),
+            cluster_label=data.get("cluster_label"),
             needs_image_retry=data.get("needs_image_retry", False),
             is_placeholder=data.get("is_placeholder", False)
         )

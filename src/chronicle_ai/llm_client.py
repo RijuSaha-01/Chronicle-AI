@@ -319,6 +319,37 @@ def ensure_synopsis(entry) -> None:
         entry.logline = data.get("logline")
         entry.synopsis = data.get("synopsis")
         entry.keywords = data.get("keywords", [])
+        
+        
+def ensure_characters_and_locations(entry) -> None:
+    """
+    Ensure an entry has characters and locations.
+    """
+    if not entry.characters or not entry.locations:
+        text = entry.narrative_text or entry.raw_text
+        prompt = f"""Analyze the following diary entry and extract:
+1. CHARACTERS: List recurring people or important characters mentioned (max 5).
+2. LOCATIONS: List recurring settings or important locations mentioned (max 3).
+
+Output the result as a raw JSON object with 'characters' and 'locations' (lists) keys.
+Do not include any other text, only the JSON.
+
+Content:
+{text[:1500]}
+
+JSON Output:"""
+        result = _make_request(prompt, timeout=30)
+        if result:
+            try:
+                import json
+                import re
+                json_match = re.search(r'\{.*\}', result, re.DOTALL)
+                if json_match:
+                    data = json.loads(json_match.group(0))
+                    entry.characters = data.get("characters", [])
+                    entry.locations = data.get("locations", [])
+            except Exception as e:
+                logging.error(f"Failed to parse characters/locations JSON: {e}")
 
 
 def process_entry(entry, force: bool = False) -> None:
@@ -350,6 +381,14 @@ def process_entry(entry, force: bool = False) -> None:
     ensure_narrative(entry)
     ensure_title(entry)
     ensure_synopsis(entry)
+    ensure_characters_and_locations(entry)
+    
+    # Auto-assign to cluster if clusters exist
+    try:
+        from .clustering import memory_clusterer
+        memory_clusterer.assign_entry_to_cluster(entry)
+    except Exception as e:
+        logging.warning(f"Failed to auto-assign cluster for entry {entry.id}: {e}")
 
 
 def _process_entry_full(entry) -> None:
@@ -367,6 +406,7 @@ Analyze the following diary entry and produce a complete episode package.
 3. TITLES: Generate 5 title options with these patterns: 'The One Where...', Single evocative word, Reference, Metaphorical, Direct dramatic. Include relevance scores (0.0-1.0).
 4. METADATA: Provide a 1-sentence logline, a 2-3 sentence synopsis, and exactly 5 keywords.
 5. THEMES: Pick any of the following themes that apply: work, health, relationships, growth, conflict, creativity. Also suggest 2 other relevant themes not in this list.
+6. ENTITIES: List key people/characters (recurring or significant) and key locations/settings.
 
 Diary entry:
 {entry.raw_text}
@@ -376,7 +416,9 @@ IMPORTANT: Output ONLY a raw JSON object with these keys:
 'narrative' (string),
 'titles' (list of objects with title, pattern, score),
 'metadata' (object with logline, synopsis, keywords),
-'themes' (list of strings).
+'themes' (list of strings),
+'characters' (list of strings),
+'locations' (list of strings).
 """
 
     # Apply cinematic style guide to the prompt
@@ -435,8 +477,20 @@ IMPORTANT: Output ONLY a raw JSON object with these keys:
                 # 5. Themes
                 entry.themes = data.get('themes', [])
                 
+                # 6. Entities
+                entry.characters = data.get('characters', [])
+                entry.locations = data.get('locations', [])
+                
                 # Cache the successful result
                 director_engine.cache.set(cache_key, data)
+                
+                # Auto-assign to cluster
+                try:
+                    from .clustering import memory_clusterer
+                    memory_clusterer.assign_entry_to_cluster(entry)
+                except Exception as ex:
+                    logging.warning(f"Failed to auto-assign cluster for entry {entry.id}: {ex}")
+                
                 return
         except Exception as e:
             raise Exception(f"Failed to parse integrated JSON: {e}")
@@ -476,3 +530,5 @@ def _populate_entry_from_data(entry, data: Dict) -> None:
     entry.synopsis = meta.get('synopsis', '')
     entry.keywords = meta.get('keywords', [])
     entry.themes = data.get('themes', [])
+    entry.characters = data.get('characters', [])
+    entry.locations = data.get('locations', [])

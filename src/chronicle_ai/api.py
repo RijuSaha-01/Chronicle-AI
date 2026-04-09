@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 from .models import Entry
 from .repository import get_repository, EntryRepository
 from .llm_client import process_entry, is_ollama_available
+from .clustering import memory_clusterer
 from .exports import export_entry_to_markdown, export_weekly
 from . import __version__
 
@@ -59,6 +60,8 @@ class EntryResponse(BaseModel):
     image_variants: dict = {}
     mood: Optional[str] = None
     style: Optional[str] = None
+    characters: List[str] = []
+    locations: List[str] = []
     
     class Config:
         from_attributes = True
@@ -224,7 +227,9 @@ async def create_entry(body: EntryCreate):
         title=entry.title,
         logline=entry.logline,
         synopsis=entry.synopsis,
-        keywords=entry.keywords
+        keywords=entry.keywords,
+        characters=entry.characters,
+        locations=entry.locations
     )
 
 
@@ -274,7 +279,9 @@ async def create_guided_entry(body: GuidedEntryCreate):
         title=entry.title,
         logline=entry.logline,
         synopsis=entry.synopsis,
-        keywords=entry.keywords
+        keywords=entry.keywords,
+        characters=entry.characters,
+        locations=entry.locations
     )
 
 
@@ -308,6 +315,8 @@ async def list_entries(
                 logline=e.logline,
                 synopsis=e.synopsis,
                 keywords=e.keywords,
+                characters=e.characters,
+                locations=e.locations,
                 conflict_data=e.conflict_data.to_dict() if e.conflict_data else None
             )
             for e in entries
@@ -416,8 +425,45 @@ async def get_entry(entry_id: int):
         title=entry.title,
         logline=entry.logline,
         synopsis=entry.synopsis,
-        keywords=entry.keywords
+        keywords=entry.keywords,
+        characters=entry.characters,
+        locations=entry.locations
     )
+
+
+@app.get("/entries/{entry_id}/connections")
+async def get_entry_connections(entry_id: int):
+    """
+    Find internal connections for an episode (recurring characters, locations, etc).
+    """
+    from .connection_finder import connection_finder
+    
+    connections = connection_finder.find_connections(entry_id)
+    return {"episode_id": entry_id, "connections": connections}
+
+
+@app.get("/clusters/map")
+async def get_cluster_map():
+    """Get the text-based cluster map data."""
+    return memory_clusterer.get_cluster_map()
+
+
+@app.get("/clusters/view/{cluster_name}")
+async def get_cluster_episodes(cluster_name: str):
+    """Get all episodes in a specific cluster."""
+    repo = get_repository()
+    all_entries = repo.list_entries()
+    filtered = [e for e in all_entries if e.cluster_label and e.cluster_label.lower() == cluster_name.lower()]
+    return filtered
+
+
+@app.post("/clusters/refresh")
+async def refresh_clusters(k: int = Query(12)):
+    """Re-run the clustering algorithm and update all entries."""
+    if not is_ollama_available():
+        raise HTTPException(status_code=503, detail="Ollama is not available for cluster naming")
+    clusters = memory_clusterer.cluster_episodes(k=k)
+    return {"status": "success", "cluster_count": len(clusters)}
 
 
 @app.post("/entries/{entry_id}/regenerate", response_model=EntryResponse)
@@ -439,6 +485,8 @@ async def regenerate_entry(entry_id: int):
     # Clear and regenerate
     entry.narrative_text = None
     entry.title = None
+    entry.characters = []
+    entry.locations = []
     process_entry(entry)
     
     repo.update_entry(entry)
@@ -451,7 +499,9 @@ async def regenerate_entry(entry_id: int):
         title=entry.title,
         logline=entry.logline,
         synopsis=entry.synopsis,
-        keywords=entry.keywords
+        keywords=entry.keywords,
+        characters=entry.characters,
+        locations=entry.locations
     )
 
 
@@ -542,6 +592,8 @@ async def get_gallery(
                 logline=e.logline,
                 synopsis=e.synopsis,
                 keywords=e.keywords,
+                characters=e.characters,
+                locations=e.locations,
                 season_id=e.season_id,
                 cover_art_path=e.cover_art_path,
                 image_variants=e.image_variants,
@@ -573,6 +625,8 @@ async def get_season_gallery(season_id: int, limit: int = 50):
                 logline=e.logline,
                 synopsis=e.synopsis,
                 keywords=e.keywords,
+                characters=e.characters,
+                locations=e.locations,
                 season_id=e.season_id,
                 cover_art_path=e.cover_art_path,
                 image_variants=e.image_variants,

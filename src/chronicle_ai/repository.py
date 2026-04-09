@@ -14,7 +14,7 @@ from .models import Entry, ConflictAnalysis, Recap, Season, SeasonArc
 
 
 # All columns for the diary_entries table to ensure consistency in SELECT queries
-ENTRY_COLUMNS = "id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, themes, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style, needs_image_retry, is_placeholder, audio_duration, audio_path, audio_file_size, audio_generation_date"
+ENTRY_COLUMNS = "id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, themes, characters, locations, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style, needs_image_retry, is_placeholder, audio_duration, audio_path, audio_file_size, audio_generation_date, cluster_label"
 
 
 # Default database location (can be overridden via environment variable)
@@ -98,8 +98,14 @@ class EntryRepository:
                 cursor.execute("ALTER TABLE diary_entries ADD COLUMN audio_path TEXT")
             if 'audio_file_size' not in columns:
                 cursor.execute("ALTER TABLE diary_entries ADD COLUMN audio_file_size INTEGER")
+            if 'characters' not in columns:
+                cursor.execute("ALTER TABLE diary_entries ADD COLUMN characters TEXT")
+            if 'locations' not in columns:
+                cursor.execute("ALTER TABLE diary_entries ADD COLUMN locations TEXT")
             if 'audio_generation_date' not in columns:
                 cursor.execute("ALTER TABLE diary_entries ADD COLUMN audio_generation_date TEXT")
+            if 'cluster_label' not in columns:
+                cursor.execute("ALTER TABLE diary_entries ADD COLUMN cluster_label TEXT")
             
             # Create recaps table if it doesn't exist
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='recaps'")
@@ -185,7 +191,10 @@ class EntryRepository:
                     audio_duration REAL,
                     audio_path TEXT,
                     audio_file_size INTEGER,
-                    audio_generation_date TEXT
+                    audio_generation_date TEXT,
+                    characters TEXT,
+                    locations TEXT,
+                    cluster_label TEXT
                 )
             """)
             cursor.execute("""
@@ -256,8 +265,8 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            """INSERT INTO diary_entries (date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, themes, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style, needs_image_retry, is_placeholder, audio_duration, audio_path, audio_file_size, audio_generation_date) 
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO diary_entries (date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, themes, characters, locations, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style, needs_image_retry, is_placeholder, audio_duration, audio_path, audio_file_size, audio_generation_date, cluster_label) 
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 entry.date, 
                 entry.raw_text, 
@@ -268,6 +277,8 @@ class EntryRepository:
                 entry.synopsis,
                 json.dumps(entry.keywords) if entry.keywords else None,
                 json.dumps(entry.themes) if entry.themes else None,
+                json.dumps(entry.characters) if entry.characters else None,
+                json.dumps(entry.locations) if entry.locations else None,
                 json.dumps(entry.conflict_data.to_dict()) if entry.conflict_data else None,
                 entry.recap_id,
                 entry.season_id,
@@ -281,7 +292,8 @@ class EntryRepository:
                 entry.audio_duration,
                 entry.audio_path,
                 entry.audio_file_size,
-                entry.audio_generation_date
+                entry.audio_generation_date,
+                entry.cluster_label
             )
         )
         
@@ -309,7 +321,7 @@ class EntryRepository:
         
         cursor.execute(
             """UPDATE diary_entries 
-               SET date = ?, raw_text = ?, narrative_text = ?, title = ?, title_options = ?, logline = ?, synopsis = ?, keywords = ?, themes = ?, conflict_data = ?, recap_id = ?, season_id = ?, cover_art_path = ?, image_variants = ?, cover_history = ?, mood = ?, style = ?, needs_image_retry = ?, is_placeholder = ?, audio_duration = ?, audio_path = ?, audio_file_size = ?, audio_generation_date = ?
+               SET date = ?, raw_text = ?, narrative_text = ?, title = ?, title_options = ?, logline = ?, synopsis = ?, keywords = ?, themes = ?, characters = ?, locations = ?, conflict_data = ?, recap_id = ?, season_id = ?, cover_art_path = ?, image_variants = ?, cover_history = ?, mood = ?, style = ?, needs_image_retry = ?, is_placeholder = ?, audio_duration = ?, audio_path = ?, audio_file_size = ?, audio_generation_date = ?, cluster_label = ?
                WHERE id = ?""",
             (
                 entry.date, 
@@ -321,6 +333,8 @@ class EntryRepository:
                 entry.synopsis,
                 json.dumps(entry.keywords) if entry.keywords else None,
                 json.dumps(entry.themes) if entry.themes else None,
+                json.dumps(entry.characters) if entry.characters else None,
+                json.dumps(entry.locations) if entry.locations else None,
                 json.dumps(entry.conflict_data.to_dict()) if entry.conflict_data else None,
                 entry.recap_id,
                 entry.season_id,
@@ -335,6 +349,7 @@ class EntryRepository:
                 entry.audio_path,
                 entry.audio_file_size,
                 entry.audio_generation_date,
+                entry.cluster_label,
                 entry.id
             )
         )
@@ -374,6 +389,10 @@ class EntryRepository:
                 data["keywords"] = json.loads(data["keywords"])
             if data.get("themes"):
                 data["themes"] = json.loads(data["themes"])
+            if data.get("characters"):
+                data["characters"] = json.loads(data["characters"])
+            if data.get("locations"):
+                data["locations"] = json.loads(data["locations"])
             if data.get("image_variants"):
                 data["image_variants"] = json.loads(data["image_variants"])
             if data.get("cover_history"):
@@ -413,6 +432,10 @@ class EntryRepository:
                 data["keywords"] = json.loads(data["keywords"])
             if data.get("themes"):
                 data["themes"] = json.loads(data["themes"])
+            if data.get("characters"):
+                data["characters"] = json.loads(data["characters"])
+            if data.get("locations"):
+                data["locations"] = json.loads(data["locations"])
             if data.get("image_variants"):
                 data["image_variants"] = json.loads(data["image_variants"])
             if data.get("cover_history"):
@@ -468,6 +491,10 @@ class EntryRepository:
                 data["keywords"] = json.loads(data["keywords"])
             if data.get("themes"):
                 data["themes"] = json.loads(data["themes"])
+            if data.get("characters"):
+                data["characters"] = json.loads(data["characters"])
+            if data.get("locations"):
+                data["locations"] = json.loads(data["locations"])
             if data.get("image_variants"):
                 data["image_variants"] = json.loads(data["image_variants"])
             if data.get("cover_history"):
@@ -579,6 +606,10 @@ class EntryRepository:
                 data["keywords"] = json.loads(data["keywords"])
             if data.get("themes"):
                 data["themes"] = json.loads(data["themes"])
+            if data.get("characters"):
+                data["characters"] = json.loads(data["characters"])
+            if data.get("locations"):
+                data["locations"] = json.loads(data["locations"])
             if data.get("image_variants"):
                 data["image_variants"] = json.loads(data["image_variants"])
             if data.get("cover_history"):

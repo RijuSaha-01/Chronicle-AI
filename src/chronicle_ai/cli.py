@@ -22,6 +22,7 @@ from .cover_gen import cover_generator
 from .poster_gen import poster_generator
 from .memory_chat import get_memory_chat
 from .themes import theme_manager
+from .clustering import memory_clusterer
 
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn
@@ -73,6 +74,10 @@ def cmd_add(args):
                     entry.narrative_text = f"{recap.content}\n\n{entry.narrative_text}"
             
             print(f"📝 Title: {entry.title}")
+            if entry.characters:
+                print(f"👤 Characters: {', '.join(entry.characters)}")
+            if entry.locations:
+                print(f"📍 Locations: {', '.join(entry.locations)}")
         else:
             print("⚠️  Ollama not available, saving raw text only")
     
@@ -148,6 +153,10 @@ def cmd_guided(args):
             
             print(f"\n📖 Generated Narrative:\n{entry.narrative_text}\n")
             print(f"🎬 Episode Title: {entry.title}")
+            if entry.characters:
+                print(f"👤 Characters: {', '.join(entry.characters)}")
+            if entry.locations:
+                print(f"📍 Locations: {', '.join(entry.locations)}")
         else:
             print("⚠️  Ollama not available, saving raw text only")
     
@@ -315,7 +324,11 @@ def cmd_view(args):
     if entry.logline:
         print(f"💡 Logline: {entry.logline}")
     if entry.keywords:
-        print(f"🏷️ Keywords: {', '.join(entry.keywords)}")
+        print(f"   🏷️ Keywords: {', '.join(entry.keywords)}")
+    if entry.characters:
+        print(f"   👤 Characters: {', '.join(entry.characters)}")
+    if entry.locations:
+        print(f"   📍 Locations: {', '.join(entry.locations)}")
     if entry.synopsis:
         print(f"\n📝 Synopsis:\n{entry.synopsis}")
         print()
@@ -331,6 +344,20 @@ def cmd_view(args):
             print(f"   🧠 Internal: {', '.join(cd.internal_conflicts)}")
         if cd.external_conflicts:
             print(f"   🌍 External: {', '.join(cd.external_conflicts)}")
+        print()
+
+    # Connections
+    from .connection_finder import connection_finder
+    connections = connection_finder.find_connections(entry.id)
+    if connections:
+        print("🔗 Narrative Connections:")
+        print("-" * 40)
+        for conn in connections[:5]: # Top 5
+            reasons_str = ", ".join([r['description'] for r in conn['reasons']])
+            print(f"   • {conn['date']} | {conn['title']}")
+            print(f"     [ {reasons_str} ]")
+        if len(connections) > 5:
+            print(f"   ... and {len(connections) - 5} more connections")
         print()
     
     print("📝 Original Entry:")
@@ -408,6 +435,10 @@ def cmd_regenerate(args):
     repo.update_entry(entry)
     
     print(f"\n🎬 New Title: {entry.title}")
+    if entry.characters:
+        print(f"👤 Characters: {', '.join(entry.characters)}")
+    if entry.locations:
+        print(f"📍 Locations: {', '.join(entry.locations)}")
     print(f"\n📖 New Narrative:\n{entry.narrative_text}")
     print(f"\n✅ Entry updated successfully!")
 
@@ -729,6 +760,47 @@ def cmd_embed(args):
         count = engine.batch_process_all(repo)
         console.print(f"[bold green]✅ Finished! {count} episodes processed and stored in ChromaDB.[/bold green]")
 
+
+def cmd_clusters(args):
+    """Handle the 'clusters' command - memory clustering and visualization."""
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.table import Table
+    
+    console = Console()
+    
+    if args.refresh:
+        with console.status("[bold green]🧠 Analyzing memories and clustering episodes...") as status:
+            clusters = memory_clusterer.cluster_episodes(k=args.k)
+            console.print(f"✅ Successfully identified [bold]{len(clusters)}[/bold] major clusters.")
+    
+    if args.show:
+        memory_clusterer.visualize_clusters()
+        console.print("\n[dim]Tip: Use 'chronicle clusters --view \"[NAME]\"' to explore specific content.[/dim]")
+        
+    if args.view:
+        cluster_name = args.view
+        repo = get_repository()
+        all_entries = repo.list_entries()
+        filtered = [e for e in all_entries if e.cluster_label and e.cluster_label.lower() == cluster_name.lower()]
+        
+        if not filtered:
+            console.print(f"[bold red]❌ No cluster found with name: {cluster_name}[/bold red]")
+            return
+            
+        console.print(Panel(f"[bold cyan]🎬 Cluster: {cluster_name}[/bold cyan]", border_style="cyan"))
+        console.print(f"📈 Found {len(filtered)} episodes in this memory group.\n")
+        
+        for ep in filtered:
+            console.print(f"📅 [{ep.date}] (ID: {ep.id})")
+            console.print(f"   🎬 [bold white]{ep.display_title()}[/bold white]")
+            if ep.logline:
+                console.print(f"   💡 {ep.logline}")
+            tags = ", ".join(ep.themes + [k for k in ep.keywords if k not in ep.themes])
+            console.print(f"   🏷️  {tags}")
+            console.print(f"   📝 {ep.snippet(100)}\n")
+        
+        console.print("=" * 60)
 
 def cmd_search(args):
     """Handle the 'search' command - semantic search across episodes."""
@@ -1927,6 +1999,13 @@ Examples:
     search_parser.add_argument("--start", help="Start date (YYYY-MM-DD)")
     search_parser.add_argument("--end", help="End date (YYYY-MM-DD)")
     
+    # Clusters command
+    clusters_parser = subparsers.add_parser("clusters", help="Organize and explore related episodes by semantic cluster")
+    clusters_parser.add_argument("--show", action="store_true", help="Visualize text-based cluster map")
+    clusters_parser.add_argument("--refresh", action="store_true", help="Re-cluster all episodes using embeddings")
+    clusters_parser.add_argument("--view", type=str, help="View all episodes within a specific cluster")
+    clusters_parser.add_argument("--k", type=int, default=12, help="Target number of clusters (default: 12)")
+    
     # Ask command
     ask_parser = subparsers.add_parser("ask", help="Ask conversational questions about your history")
     ask_parser.add_argument("question", help="Natural language question (e.g., 'When did I first mention the gym?')")
@@ -1985,8 +2064,8 @@ def main():
         "ask": cmd_ask,
         "chat": cmd_chat,
         "arc": cmd_arc,
-        "episodes": cmd_episodes,
         "theme-showcase": cmd_theme_showcase,
+        "clusters": cmd_clusters,
     }
 
     
