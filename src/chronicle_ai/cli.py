@@ -802,6 +802,78 @@ def cmd_clusters(args):
         
         console.print("=" * 60)
 
+
+def cmd_insights(args):
+    """Handle the 'insights' command - generate life insights."""
+    from .insights import get_memory_insights
+    from rich.panel import Panel
+    from rich.console import Console
+    
+    console = Console()
+    period = args.period or 'week'
+    
+    if not is_ollama_available():
+        console.print("[red]❌ Ollama not available. Insights generation requires an LLM.[/red]")
+        return
+
+    with console.status(f"[bold green]🧠 Analyzing your memories for the past {period}...") as status:
+        try:
+            insights_gen = get_memory_insights()
+            report = insights_gen.generate_insights(period=period)
+        except Exception as e:
+            console.print(f"[red]❌ Failed to generate insights: {e}[/red]")
+            return
+    
+    console.print(Panel(f"[bold cyan]🎬 Chronicle Life Insights: {period.capitalize()}[/bold cyan]\n[dim]{report.date_range}[/dim]", border_style="cyan"))
+    
+    # 1. Patterns, Mood, Themes
+    console.print(f"\n[bold magenta]📊 Overview & Patterns[/bold magenta]")
+    console.print(f"   • [bold]Mood Trends:[/bold] {report.mood_trends}")
+    
+    if report.patterns:
+        console.print(f"   • [bold]Patterns Noticed:[/bold]")
+        for p in report.patterns:
+            console.print(f"     - {p}")
+            
+    if report.recurring_themes:
+        console.print(f"   • [bold]Recurring Themes:[/bold] {', '.join(report.recurring_themes)}")
+        
+    # 2. Growth & Challenges
+    console.print(f"\n[bold green]🌱 Growth & Highlights[/bold green]")
+    if report.highlights:
+        console.print(f"   • [bold]Highlights:[/bold]")
+        for h in report.highlights:
+            console.print(f"     - {h}")
+            
+    if report.growth_areas:
+        console.print(f"   • [bold]Growth Areas:[/bold]")
+        for g in report.growth_areas:
+            console.print(f"     - {g}")
+            
+    if report.challenges_overcome:
+        console.print(f"   • [bold]Challenges Overcome:[/bold]")
+        for c in report.challenges_overcome:
+            console.print(f"     - {c}")
+            
+    # 3. Comparison
+    if report.year_ago_comparison:
+        console.print(f"\n[bold yellow]📜 This Time Last Year[/bold yellow]")
+        console.print(f"   {report.year_ago_comparison}")
+        
+    # 4. Anomalies
+    if report.anomalies:
+        console.print(f"\n[bold red]⚠️  Unusual Patterns[/bold red]")
+        for a in report.anomalies:
+            console.print(f"     - {a}")
+            
+    # 5. Reflection Questions
+    if report.reflection_questions:
+        console.print(f"\n[bold blue]🤔 Personalized Reflections[/bold blue]")
+        for i, q in enumerate(report.reflection_questions, 1):
+            console.print(f"   {i}. {q}")
+            
+    console.print("\n" + "=" * 60)
+
 def cmd_search(args):
     """Handle the 'search' command - semantic search across episodes."""
     from .semantic_search import get_semantic_search
@@ -2019,6 +2091,10 @@ Examples:
     arc_parser.add_argument("topic", help="The life topic to analyze (e.g., 'career', 'fitness')")
     arc_parser.add_argument("--time", help="Time range (e.g., 'Season 1', 'Last Year')")
     
+    # Insights command
+    insights_parser = subparsers.add_parser("insights", help="Generate periodic life insights and patterns")
+    insights_parser.add_argument("--period", choices=["week", "month"], default="week", help="Analysis period (default: week)")
+    
     return parser
 
 
@@ -2064,6 +2140,7 @@ def main():
         "ask": cmd_ask,
         "chat": cmd_chat,
         "arc": cmd_arc,
+        "insights": cmd_insights,
         "theme-showcase": cmd_theme_showcase,
         "clusters": cmd_clusters,
     }

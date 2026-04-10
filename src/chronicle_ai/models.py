@@ -428,3 +428,54 @@ class Entry:
     def display_title(self) -> str:
         """Return title or a fallback display string."""
         return self.title or f"Entry from {self.date}"
+
+
+@dataclass
+class InsightsReport:
+    """
+    Generated report containing patterns, trends, and reflections.
+    """
+    period: str  # week, month, year
+    date_range: str
+    patterns: List[str] = field(default_factory=list)
+    mood_trends: str = ""
+    recurring_themes: List[str] = field(default_factory=list)
+    growth_areas: List[str] = field(default_factory=list)
+    challenges_overcome: List[str] = field(default_factory=list)
+    highlights: List[str] = field(default_factory=list)
+    year_ago_comparison: Optional[str] = None
+    anomalies: List[str] = field(default_factory=list)
+    reflection_questions: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        return {
+            "period": self.period,
+            "date_range": self.date_range,
+            "patterns": self.patterns,
+            "mood_trends": self.mood_trends,
+            "recurring_themes": self.recurring_themes,
+            "growth_areas": self.growth_areas,
+            "challenges_overcome": self.challenges_overcome,
+            "highlights": self.highlights,
+            "year_ago_comparison": self.year_ago_comparison,
+            "anomalies": self.anomalies,
+            "reflection_questions": self.reflection_questions
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "InsightsReport":
+        if not data:
+            return None
+        return cls(
+            period=data.get("period", ""),
+            date_range=data.get("date_range", ""),
+            patterns=data.get("patterns", []),
+            mood_trends=data.get("mood_trends", ""),
+            recurring_themes=data.get("recurring_themes", []),
+            growth_areas=data.get("growth_areas", []),
+            challenges_overcome=data.get("challenges_overcome", []),
+            highlights=data.get("highlights", []),
+            year_ago_comparison=data.get("year_ago_comparison"),
+            anomalies=data.get("anomalies", []),
+            reflection_questions=data.get("reflection_questions", [])
+        )
