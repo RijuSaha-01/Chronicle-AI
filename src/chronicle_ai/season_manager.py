@@ -240,3 +240,138 @@ JSON Output:"""
             self.repo.update_entry(entry)
             
         return saved_season
+
+    def suggest_seasons(self) -> Dict:
+        """
+        Suggest season boundaries based on semantic analysis of embeddings.
+        
+        Method:
+        1. Calculate embedding distances between consecutive episodes.
+        2. Detect major life chapter shifts (large embedding jumps).
+        3. Suggest season breaks at significant transitions.
+        4. Name seasons based on dominant themes in that period.
+        5. Compare semantic seasons vs calendar-based seasons.
+        """
+        import numpy as np
+        from .embedding_engine import get_embedding_engine
+        
+        engine = get_embedding_engine()
+        entries = self.repo.list_entries()
+        if len(entries) < 3:
+            return {"suggestions": [], "message": "Not enough episodes for semantic analysis (minimum 3 required)."}
+            
+        # 1. Sort chronologically
+        entries.sort(key=lambda x: x.date)
+        
+        # 2. Get embeddings (average of narrative chunks)
+        embs = []
+        valid_entries = []
+        
+        logger.info("Fetching embeddings for semantic analysis...")
+        for e in entries:
+            # We use narrative section as the primary signal for thematic shifts
+            res = engine.collection.get(
+                where={"episode_id": str(e.id), "section": "narrative"},
+                include=["embeddings"]
+            )
+            
+            if res["embeddings"]:
+                # Compute average embedding if multi-chunk, else use first
+                avg_emb = np.mean(res["embeddings"], axis=0)
+                embs.append(avg_emb)
+                valid_entries.append(e)
+                
+        if len(embs) < 3:
+            return {
+                "suggestions": [], 
+                "message": "Missing embeddings for many episodes. Please run 'chronicle embed --batch' first."
+            }
+            
+        # 3. Calculate distances between consecutive episodes
+        distances = []
+        for i in range(len(embs) - 1):
+            v1 = embs[i]
+            v2 = embs[i+1]
+            # Cosine distance: 1 - cosine similarity
+            norm1 = np.linalg.norm(v1)
+            norm2 = np.linalg.norm(v2)
+            if norm1 == 0 or norm2 == 0:
+                distances.append(0.0)
+            else:
+                dist = 1 - (np.dot(v1, v2) / (norm1 * norm2))
+                distances.append(float(dist))
+            
+        # 4. Detect significant jumps (Threshold: Mean + 1.3 * StdDev)
+        mean_dist = np.mean(distances)
+        std_dist = np.std(distances)
+        threshold = mean_dist + 1.3 * std_dist
+        
+        jump_indices = [i for i, d in enumerate(distances) if d > threshold]
+        
+        # 5. Group into potential boundaries (marks the START of a new season)
+        # Season 1 always starts at index 0
+        potential_starts = {0}
+        for idx in jump_indices:
+            # A jump after episode i means season i ends, and i+1 is a potential new start
+            potential_starts.add(idx + 1)
+        
+        potential_starts = sorted(list(potential_starts))
+        
+        # 6. Prepare summary for LLM to validate and name
+        summary_lines = []
+        for i, entry in enumerate(valid_entries):
+            marker = " [CHAPTER TRANSITION DETECTED]" if i in potential_starts and i != 0 else ""
+            summary_lines.append(f"{i}: {entry.date} - {entry.title or entry.snippet(50)}{marker}")
+            
+        episodes_context = "\n".join(summary_lines)
+        
+        prompt = f"""You are a master story editor for a cinematic life documentary. 
+I have analyzed the semantic distance between consecutive episodes in a person's life and detected major jumps in the underlying themes/emotions (marked with [CHAPTER TRANSITION DETECTED]).
+
+Episodes:
+{episodes_context}
+
+Your Task:
+1. Review the suggested transitions. If they make thematic sense based on titles/dates, keep them. If a transition seems weak, ignore it. If there's a clear gap elsewhere that I missed, add it.
+2. Group the episodes into a final list of 'Seasons'.
+3. For each season, provide:
+   - 'start_index': Index of the first episode.
+   - 'end_index': Index of the last episode.
+   - 'title': A dramatic, cinematic season title (e.g., 'Winter of Discontent', 'The Rising Phoenix').
+   - 'themes': 3-5 dominant keywords.
+   - 'description': A one-sentence summary of the chapter's arc.
+
+Also, provide a 'Comparison' explaining why these Semantic Seasons are more meaningful than Calendar Seasons (which just break every 30 days regardless of what happened).
+
+Output JSON only:
+{{
+  "seasons": [
+    {{ "start_index": 0, "end_index": 5, "title": "...", "themes": [...], "description": "..." }},
+    ...
+  ],
+  "comparison": "Your analysis of semantic vs calendar breaks."
+}}"""
+
+        logger.info("Sending semantic transitions to LLM for validation...")
+        result = _make_request(prompt, timeout=90)
+        
+        data = {"seasons": [], "comparison": ""}
+        if result:
+            try:
+                import re
+                json_match = re.search(r'\{.*\}', result, re.DOTALL)
+                if json_match:
+                    data = json.loads(json_match.group(0))
+            except Exception as e:
+                logger.error(f"Failed to parse suggested seasons JSON: {e}")
+
+        return {
+            "suggestions": data.get("seasons", []),
+            "comparison": data.get("comparison", ""),
+            "episodes": valid_entries,
+            "metrics": {
+                "mean_distance": float(mean_dist),
+                "threshold": float(threshold),
+                "jumps_found": len(jump_indices)
+            }
+        }

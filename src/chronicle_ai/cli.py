@@ -1147,6 +1147,55 @@ def cmd_seasons(args):
     repo = get_repository()
     manager = SeasonManager(repo)
     
+    if getattr(args, 'suggest', False):
+        from rich.console import Console
+        from rich.panel import Panel
+        from rich.table import Table
+        from rich.markdown import Markdown
+        
+        console = Console()
+        console.print("[bold cyan]🧠 Analyzing narrative embeddings to suggest life seasons...[/bold cyan]")
+        
+        result = manager.suggest_seasons()
+        if "message" in result:
+            console.print(f"[yellow]⚠️  {result['message']}[/yellow]")
+            return
+            
+        suggestions = result["suggestions"]
+        comparison = result["comparison"]
+        episodes = result["episodes"]
+        
+        if comparison:
+            console.print(Panel(
+                Markdown(comparison),
+                title="[bold green]Semantic vs Calendar Seasons[/bold green]",
+                border_style="green"
+            ))
+        
+        console.print(f"\n[bold cyan]🎬 Suggested Life Chapters ({len(suggestions)}):[/bold cyan]")
+        
+        for i, s in enumerate(suggestions, 1):
+            start_idx = s.get('start_index', 0)
+            end_idx = s.get('end_index', 0)
+            
+            # Boundary check
+            if not episodes:
+                continue
+            start_idx = max(0, min(start_idx, len(episodes)-1))
+            end_idx = max(start_idx, min(end_idx, len(episodes)-1))
+            
+            start_date = episodes[start_idx].date
+            end_date = episodes[end_idx].date
+            
+            console.print(f"\n[bold magenta]Season {i}: {s.get('title', 'Unknown Arc')}[/bold magenta]")
+            console.print(f"   📅 {start_date} to {end_date} ({end_idx - start_idx + 1} episodes)")
+            console.print(f"   💡 {s.get('description', '')}")
+            if s.get('themes'):
+                console.print(f"   🏷️  Themes: [dim]{', '.join(s.get('themes', []))}[/dim]")
+            
+        console.print("\n[dim]To apply these suggestions, use: chronicle seasons --create --mode manual --start DATE --end DATE --title \"NAME\"[/dim]")
+        return
+
     if args.create:
         if args.mode == "manual":
             if not args.start or not args.end or not args.title:
@@ -1968,6 +2017,7 @@ Examples:
     seasons_parser.add_argument("--end", type=str, help="End date for manual season (YYYY-MM-DD)")
     seasons_parser.add_argument("--title", type=str, help="Title for manual season")
     seasons_parser.add_argument("--analyze", type=int, help="Perform narrative arc analysis on a season by ID")
+    seasons_parser.add_argument("--suggest", action="store_true", help="Suggest season boundaries based on semantic analysis")
     
     # Visual prompt command
     visual_parser = subparsers.add_parser("visual-prompt", help="Generate Stable Diffusion prompts for an episode's cover art")
