@@ -1420,6 +1420,60 @@ def cmd_retry_images(args):
             
     console.print(f"\n[bold green]✅ Retry complete! {success_count}/{len(to_retry)} episodes successfully upgraded from placeholders.[/bold green]")
 
+
+def cmd_similar(args):
+    """Handle the 'similar' command - find similar episodes."""
+    from .semantic_search import get_semantic_search
+    from .llm_client import explain_similarity
+    from rich.panel import Panel
+    from rich.table import Table
+    
+    console = Console()
+    repo = get_repository()
+    search_engine = get_semantic_search()
+    
+    ref_id = args.episode
+    ref_episode = repo.get_entry_by_id(ref_id)
+    
+    if not ref_episode:
+        console.print(f"[bold red]❌ Episode {ref_id} not found.[/bold red]")
+        return
+        
+    mode = "opposite" if args.opposite else "similar"
+    console.print(f"\n[bold cyan]🎬 Finding {mode} episodes for: {ref_episode.display_title()}[/bold cyan]")
+    
+    with console.status(f"[bold green]🧠 Searching embedding space for {mode} matches...") as status:
+        if mode == "similar":
+            results = search_engine.find_similar_episodes(ref_id, limit=args.limit)
+        else:
+            results = search_engine.find_opposite_episodes(ref_id, limit=args.limit)
+            
+    if not results:
+        console.print("[yellow]📭 No matches found.[/yellow]")
+        return
+        
+    table = Table(show_header=True, header_style="bold magenta", box=None)
+    table.add_column("ID", width=6)
+    table.add_column("Score", width=10)
+    table.add_column("Episode", width=45)
+    table.add_column("Date", width=12)
+    
+    for res in results:
+        table.add_row(
+            str(res['episode_id']),
+            f"{res['similarity_score']:.4f}",
+            f"[bold white]{res['title']}[/bold white]\n[dim]{res['themes']}[/dim]",
+            res['date']
+        )
+        if mode == "similar" and not args.no_explain:
+            match_ep = repo.get_entry_by_id(res['episode_id'])
+            explanation = explain_similarity(ref_episode, match_ep)
+            table.add_row("", "", f"[italic cyan]Why: {explanation}[/italic cyan]", "")
+            table.add_row("", "", "", "") # Spacer
+            
+    console.print(table)
+    console.print(f"\n[dim]Tip: Use 'chronicle view [ID]' to explore matches.[/dim]")
+
     # CLI View
     console.print(f"\n[bold cyan]🖼️  Chronicle Image Gallery ({len(entries)} items)[/bold cyan]")
     console.print("=" * 80)
@@ -2145,6 +2199,13 @@ Examples:
     insights_parser = subparsers.add_parser("insights", help="Generate periodic life insights and patterns")
     insights_parser.add_argument("--period", choices=["week", "month"], default="week", help="Analysis period (default: week)")
     
+    # Similar command
+    similar_parser = subparsers.add_parser("similar", help="Find episodes similar or opposite to a target")
+    similar_parser.add_argument("--episode", type=int, required=True, help="Target episode ID")
+    similar_parser.add_argument("--limit", type=int, default=5, help="Number of matches to find")
+    similar_parser.add_argument("--opposite", action="store_true", help="Find most different episodes instead of similar")
+    similar_parser.add_argument("--no-explain", action="store_true", help="Skip AI explanation of similarity")
+    
     return parser
 
 
@@ -2193,6 +2254,7 @@ def main():
         "insights": cmd_insights,
         "theme-showcase": cmd_theme_showcase,
         "clusters": cmd_clusters,
+        "similar": cmd_similar,
     }
 
     

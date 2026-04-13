@@ -135,6 +135,23 @@ class ArcSummaryResponse(BaseModel):
     progression_score: float
 
 
+class SimilarityResponse(BaseModel):
+    """Response schema for a similar episode."""
+    episode_id: int
+    title: str
+    similarity_score: float
+    date: str
+    themes: str
+    explanation: Optional[str] = None
+
+
+class EpisodeSimilarityListResponse(BaseModel):
+    """Response schema for list of similar/opposite episodes."""
+    reference_id: int
+    mode: str
+    results: List[SimilarityResponse]
+
+
 # =============================================================================
 # FastAPI Application
 
@@ -436,10 +453,60 @@ async def get_entry_connections(entry_id: int):
     """
     Find internal connections for an episode (recurring characters, locations, etc).
     """
-    from .connection_finder import connection_finder
-    
     connections = connection_finder.find_connections(entry_id)
     return {"episode_id": entry_id, "connections": connections}
+
+
+@app.get("/episodes/{episode_id}/similar", response_model=EpisodeSimilarityListResponse)
+async def get_similar_episodes(
+    episode_id: int,
+    limit: int = Query(5, ge=1, le=10),
+    mode: str = Query("similar", regex="^(similar|opposite)$"),
+    explain: bool = Query(True, description="Generate thematic explanation for matches")
+):
+    """
+    Find episodes similar or opposite to a selected one.
+    
+    Excludes episodes from the same week to avoid temporal similarity bias.
+    """
+    from .semantic_search import get_semantic_search
+    from .llm_client import explain_similarity
+    
+    repo = get_repository()
+    ref_episode = repo.get_entry_by_id(episode_id)
+    if not ref_episode:
+        raise HTTPException(status_code=404, detail=f"Episode {episode_id} not found")
+        
+    search_engine = get_semantic_search()
+    
+    if mode == "similar":
+        results = search_engine.find_similar_episodes(episode_id, limit=limit)
+    else:
+        results = search_engine.find_opposite_episodes(episode_id, limit=limit)
+        
+    # Generate explanations if requested and it's 'similar' mode
+    final_results = []
+    for res in results:
+        explanation = None
+        if explain and mode == "similar":
+            match_ep = repo.get_entry_by_id(res["episode_id"])
+            if match_ep:
+                explanation = explain_similarity(ref_episode, match_ep)
+        
+        final_results.append(SimilarityResponse(
+            episode_id=res["episode_id"],
+            title=res["title"],
+            similarity_score=res["similarity_score"],
+            date=res["date"],
+            themes=res["themes"],
+            explanation=explanation
+        ))
+        
+    return EpisodeSimilarityListResponse(
+        reference_id=episode_id,
+        mode=mode,
+        results=final_results
+    )
 
 
 @app.get("/clusters/map")

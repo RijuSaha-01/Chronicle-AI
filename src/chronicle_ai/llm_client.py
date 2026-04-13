@@ -528,7 +528,37 @@ def _populate_entry_from_data(entry, data: Dict) -> None:
     meta = data.get('metadata', {})
     entry.logline = meta.get('logline', '')
     entry.synopsis = meta.get('synopsis', '')
-    entry.keywords = meta.get('keywords', [])
-    entry.themes = data.get('themes', [])
     entry.characters = data.get('characters', [])
     entry.locations = data.get('locations', [])
+
+
+def explain_similarity(ep1, ep2) -> str:
+    """
+    Generate an explanation of why two episodes are similar (shared themes/narrative).
+    """
+    if not ep1 or not ep2:
+        return "Insufficient data to compare episodes."
+
+    prompt = f"""Compare these two diary episodes and explain why they are semantically similar.
+Identify shared themes, recurring characters, similar moods, or echoing life events.
+Keep the explanation to 1-2 concise sentences.
+
+Episode 1: "{ep1.title}" ({ep1.date})
+Synopsis: {ep1.synopsis}
+Themes: {", ".join(ep1.themes or [])}
+
+Episode 2: "{ep2.title}" ({ep2.date})
+Synopsis: {ep2.synopsis}
+Themes: {", ".join(ep2.themes or [])}
+
+Similarity Explanation (1-2 sentences):"""
+
+    result = _make_request(prompt, timeout=30)
+    if result:
+        return result.strip().strip('"\'')
+    
+    # Fallback if LLM fails
+    shared_themes = set(ep1.themes or []) & set(ep2.themes or [])
+    if shared_themes:
+        return f"Shared themes: {', '.join(list(shared_themes)[:3])}."
+    return "These episodes share similar narrative undertones and semantic context."
