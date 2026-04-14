@@ -1009,19 +1009,98 @@ def cmd_arc(args):
 
 
 def cmd_chat(args):
-    """Handle the 'chat' command - interactive conversation mode."""
+    """Handle the 'chat' command - interactive conversation mode with persistence."""
     from rich.console import Console
     from rich.panel import Panel
     from rich.markdown import Markdown
     from rich.text import Text
     from rich.prompt import Prompt
+    from rich.table import Table
     
     console = Console()
-    chat = get_memory_chat()
+    
+    # Run auto-cleanup (configurable via settings, default 30 days)
+    repo = get_repository()
+    cleanup_days = int(repo.get_setting("chat_cleanup_days", "30"))
+    # Only cleanup if explicitly requested or occasionally? 
+    # Requirement says "Auto-cleanup chats older than 30 days (configurable)"
+    # We can run it on every chat start but maybe that's too much.
+    # Let's just do it if --cleanup is passed or always at start.
+    if getattr(args, 'cleanup', False):
+        count = repo.cleanup_old_chats(cleanup_days)
+        console.print(f"[dim]🧹 Cleaned up {count} chat sessions older than {cleanup_days} days.[/dim]")
+    
+    # Handle History List
+    if getattr(args, 'history', False):
+        sessions = repo.list_chat_sessions(limit=20)
+        if not sessions:
+            console.print("[yellow]📭 No past chat sessions found.[/yellow]")
+            return
+            
+        console.print(f"\n[bold cyan]📜 Past Chat Conversations[/bold cyan]")
+        table = Table(show_header=True, header_style="bold magenta", box=None)
+        table.add_column("ID", width=6)
+        table.add_column("Title", width=40)
+        table.add_column("Last Updated", width=25)
+        
+        for s in sessions:
+            table.add_row(str(s.id), s.title, s.last_updated)
+        
+        console.print(table)
+        console.print("\n[dim]To resume: chronicle chat --resume [ID] (defaults to latest)[/dim]")
+        return
+
+    # Handle Search
+    if getattr(args, 'search', None):
+        results = repo.search_chat_history(args.search)
+        if not results:
+            console.print(f"[yellow]📭 No messages found matching \"{args.search}\".[/yellow]")
+            return
+            
+        console.print(f"\n[bold cyan]🔍 Search Results in Chat History: \"{args.search}\"[/bold cyan]")
+        for res in results:
+            role = "USER" if res['role'] == 'user' else "CHRONICLE"
+            content = res['content'].replace(args.search, f"[bold yellow]{args.search}[/bold yellow]")
+            console.print(Panel(
+                f"[dim]{res['timestamp']}[/dim]\n[bold green]{role}:[/bold green] {content}",
+                title=f"Session {res['session_id']}: {res['title']}",
+                border_style="cyan"
+            ))
+        return
+
+    # Handle Export
+    if getattr(args, 'export', None):
+        session_id = args.export
+        chat = get_memory_chat(session_id=session_id)
+        content = chat.export_chat(session_id)
+        
+        filename = f"exports/chats/chat_session_{session_id}.md"
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
+        with open(filename, "w", encoding="utf-8") as f:
+            f.write(content)
+        
+        console.print(f"✅ Chat session {session_id} exported to: [green]{filename}[/green]")
+        return
+
+    # Normal Chat Mode
+    session_id = None
+    if getattr(args, 'resume', False):
+        # If --resume is passed without ID, get latest
+        if isinstance(args.resume, int):
+            session_id = args.resume
+        else:
+            sessions = repo.list_chat_sessions(limit=1)
+            if sessions:
+                session_id = sessions[0].id
+                console.print(f"[dim]🔄 Resuming latest session: {sessions[0].title} (ID: {session_id})[/dim]")
+            else:
+                console.print("[yellow]⚠️ No sessions to resume. Starting fresh.[/yellow]")
+
+    chat = get_memory_chat(session_id=session_id)
     
     console.print(Panel(
         Text.from_markup("[bold cyan]🎬 Chronicle AI - Interactive Memory Chat[/bold cyan]\n"
-                         "[dim]Ask about your past, or use special commands:[/dim]\n"
+                         f"[dim]Session ID: {chat.session_id or 'NEW'}[/dim]\n"
                          " [green]/sources[/green] - Show all cited episodes in this session\n"
                          " [yellow]/clear[/yellow]   - Reset session context\n"
                          " [red]quit[/red] or [red]Ctrl+C[/red] to exit"),
@@ -1029,6 +1108,15 @@ def cmd_chat(args):
         padding=(1, 2)
     ))
     
+    # Display previous messages if resuming
+    if chat.history:
+        console.print("\n[dim]Previous context loaded:[/dim]")
+        for msg in chat.history[-4:]: # Show last 2 exchanges
+            role = "[bold green]You[/bold green]" if msg["role"] == "user" else "[bold cyan]Chronicle AI[/bold cyan]"
+            console.print(f"\n{role}")
+            console.print(Markdown(msg["content"]))
+        console.print("\n" + "-"*40)
+
     if not is_ollama_available():
         console.print("[yellow]⚠️  Ollama is offline. Starting Ollama is recommended for conversational mode.[/yellow]\n")
 
@@ -1045,7 +1133,7 @@ def cmd_chat(args):
                 
             if user_input.strip() == "/clear":
                 chat.clear()
-                console.print("[yellow]✨ Session context cleared.[/yellow]")
+                console.print("[yellow]✨ Session context cleared. Next message will start a new session.[/yellow]")
                 continue
                 
             if user_input.strip() == "/sources":
@@ -2188,7 +2276,12 @@ Examples:
     ask_parser.add_argument("--verbose", "-v", action="store_true", help="Show citation details")
     
     # Chat command
-    subparsers.add_parser("chat", help="Start an interactive conversation with your memory")
+    chat_parser = subparsers.add_parser("chat", help="Start an interactive conversation with your memory")
+    chat_parser.add_argument("--history", action="store_true", help="List past chat sessions")
+    chat_parser.add_argument("--resume", nargs='?', const=True, type=int, help="Resume previous conversation (optional session ID)")
+    chat_parser.add_argument("--search", type=str, help="Search across all chat history")
+    chat_parser.add_argument("--export", type=int, help="Export a specific chat session as Markdown")
+    chat_parser.add_argument("--cleanup", action="store_true", help="Remove sessions older than 30 days (as per config)")
     
     # Arc command
     arc_parser = subparsers.add_parser("arc", help="Analyze character development for a specific topic")

@@ -8,9 +8,9 @@ import sqlite3
 import json
 from pathlib import Path
 from typing import List, Optional
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 
-from .models import Entry, ConflictAnalysis, Recap, Season, SeasonArc
+from .models import Entry, ConflictAnalysis, Recap, Season, SeasonArc, ChatMessage, ChatSession
 
 
 # All columns for the diary_entries table to ensure consistency in SELECT queries
@@ -164,6 +164,28 @@ class EntryRepository:
                 # Set defaults
                 cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ("visual_style", "cinematic"))
                 cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ("voice_profile", "STORYTELLER"))
+
+            # Create chat tables if they don't exist
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='chat_sessions'")
+            if cursor.fetchone() is None:
+                cursor.execute("""
+                    CREATE TABLE chat_sessions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        title TEXT NOT NULL,
+                        created_at TEXT NOT NULL,
+                        last_updated TEXT NOT NULL
+                    )
+                """)
+                cursor.execute("""
+                    CREATE TABLE chat_messages (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        session_id INTEGER NOT NULL,
+                        role TEXT NOT NULL,
+                        content TEXT NOT NULL,
+                        timestamp TEXT NOT NULL,
+                        FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
+                    )
+                """)
         else:
             # Create table with all columns
             cursor.execute("""
@@ -225,8 +247,27 @@ class EntryRepository:
                     value TEXT NOT NULL
                 )
             """)
-            cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ("visual_style", "cinematic"))
             cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ("voice_profile", "STORYTELLER"))
+
+            # Create chat tables
+            cursor.execute("""
+                CREATE TABLE chat_sessions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    title TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    last_updated TEXT NOT NULL
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE chat_messages (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id INTEGER NOT NULL,
+                    role TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    timestamp TEXT NOT NULL,
+                    FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
+                )
+            """)
         
         conn.commit()
         conn.close()
@@ -837,6 +878,108 @@ class EntryRepository:
         
         conn.commit()
         conn.close()
+
+    # --- Chat Persistence Methods ---
+
+    def create_chat_session(self, title: str = "New Chat") -> ChatSession:
+        """Create a new chat session."""
+        session = ChatSession(title=title)
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute(
+            "INSERT INTO chat_sessions (title, created_at, last_updated) VALUES (?, ?, ?)",
+            (session.title, session.created_at, session.last_updated)
+        )
+        session.id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return session
+
+    def add_chat_message(self, session_id: int, message: ChatMessage):
+        """Add a message to a chat session."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute(
+            "INSERT INTO chat_messages (session_id, role, content, timestamp) VALUES (?, ?, ?, ?)",
+            (session_id, message.role, message.content, message.timestamp)
+        )
+        
+        # Update last_updated in session
+        cursor.execute(
+            "UPDATE chat_sessions SET last_updated = ? WHERE id = ?",
+            (datetime.now().isoformat(), session_id)
+        )
+        
+        conn.commit()
+        conn.close()
+
+    def get_chat_session(self, session_id: int) -> Optional[ChatSession]:
+        """Retrieve a chat session with all its messages."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT id, title, created_at, last_updated FROM chat_sessions WHERE id = ?", (session_id,))
+        row = cursor.fetchone()
+        
+        if not row:
+            conn.close()
+            return None
+            
+        session = ChatSession.from_dict(dict(row))
+        
+        cursor.execute("SELECT role, content, timestamp FROM chat_messages WHERE session_id = ? ORDER BY id ASC", (session_id,))
+        for msg_row in cursor.fetchall():
+            session.messages.append(ChatMessage.from_dict(dict(msg_row)))
+            
+        conn.close()
+        return session
+
+    def list_chat_sessions(self, limit: int = 20) -> List[ChatSession]:
+        """List recent chat sessions."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute(
+            "SELECT id, title, created_at, last_updated FROM chat_sessions ORDER BY last_updated DESC LIMIT ?",
+            (limit,)
+        )
+        sessions = [ChatSession.from_dict(dict(row)) for row in cursor.fetchall()]
+        conn.close()
+        return sessions
+
+    def search_chat_history(self, query: str) -> List[dict]:
+        """Search across all chat sessions for specific content."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        # Search in messages
+        cursor.execute(
+            """SELECT s.id as session_id, s.title, m.role, m.content, m.timestamp 
+               FROM chat_messages m
+               JOIN chat_sessions s ON m.session_id = s.id
+               WHERE m.content LIKE ? 
+               ORDER BY m.timestamp DESC""",
+            (f"%{query}%",)
+        )
+        results = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return results
+
+    def cleanup_old_chats(self, days: int = 30) -> int:
+        """Remove chat sessions older than specified days."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        cutoff = (datetime.now() - timedelta(days=days)).isoformat()
+        
+        cursor.execute("DELETE FROM chat_sessions WHERE last_updated < ?", (cutoff,))
+        count = cursor.rowcount
+        
+        conn.commit()
+        conn.close()
+        return count
 
 
 # Global repository instance for convenience

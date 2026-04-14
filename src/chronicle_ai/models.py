@@ -6,7 +6,7 @@ Defines the Entry model and related data structures for diary entries.
 
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict
-from datetime import date
+from datetime import date, datetime
 import json
 
 
@@ -477,5 +477,60 @@ class InsightsReport:
             highlights=data.get("highlights", []),
             year_ago_comparison=data.get("year_ago_comparison"),
             anomalies=data.get("anomalies", []),
-            reflection_questions=data.get("reflection_questions", [])
+        )
+
+
+@dataclass
+class ChatMessage:
+    """
+    A single message in a chat conversation.
+    """
+    role: str  # user, assistant
+    content: str
+    timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
+
+    def to_dict(self) -> dict:
+        return {
+            "role": self.role,
+            "content": self.content,
+            "timestamp": self.timestamp
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "ChatMessage":
+        return cls(
+            role=data.get("role"),
+            content=data.get("content"),
+            timestamp=data.get("timestamp", datetime.now().isoformat())
+        )
+
+
+@dataclass
+class ChatSession:
+    """
+    A persistent chat session containing multiple messages.
+    """
+    id: Optional[int] = None
+    title: str = "New Chat"
+    created_at: str = field(default_factory=lambda: datetime.now().isoformat())
+    last_updated: str = field(default_factory=lambda: datetime.now().isoformat())
+    messages: List[ChatMessage] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "title": self.title,
+            "created_at": self.created_at,
+            "last_updated": self.last_updated,
+            "messages": [m.to_dict() for m in self.messages]
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "ChatSession":
+        return cls(
+            id=data.get("id"),
+            title=data.get("title", "New Chat"),
+            created_at=data.get("created_at", datetime.now().isoformat()),
+            last_updated=data.get("last_updated", datetime.now().isoformat()),
+            messages=[ChatMessage.from_dict(m) for m in data.get("messages", [])]
         )
