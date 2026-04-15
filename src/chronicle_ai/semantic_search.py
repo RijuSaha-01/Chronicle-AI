@@ -64,9 +64,11 @@ class SemanticSearch:
             if "date_range" in filters:
                 start, end = filters["date_range"]
                 if start:
-                    conditions.append({"date": {"$gte": start}})
+                    start_int = int(start.replace("-", "")) if isinstance(start, str) else start
+                    conditions.append({"date_int": {"$gte": start_int}})
                 if end:
-                    conditions.append({"date": {"$lte": end}})
+                    end_int = int(end.replace("-", "")) if isinstance(end, str) else end
+                    conditions.append({"date_int": {"$lte": end_int}})
             
             # Season filter
             if "season" in filters and filters["season"] is not None:

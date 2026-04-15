@@ -86,6 +86,17 @@ class EmbeddingEngine:
                 
                 temp_chunk = ""
                 for s in sentences:
+                    # If a single sentence is STILL too large, split it by words
+                    if len(s.split()) > word_limit:
+                        if temp_chunk:
+                            chunks.append(temp_chunk)
+                            temp_chunk = ""
+                        
+                        words = s.split()
+                        for i in range(0, len(words), word_limit):
+                            chunks.append(" ".join(words[i:i + word_limit]))
+                        continue
+
                     if len((temp_chunk + " " + s).split()) <= word_limit:
                         temp_chunk = (temp_chunk + " " + s).strip()
                     else:
@@ -163,11 +174,16 @@ class EmbeddingEngine:
             chunks = self._chunk_text(content)
             for i, chunk in enumerate(chunks):
                 documents.append(chunk)
+                # Convert date string (YYYY-MM-DD) to integer (YYYYMMDD) for numerical comparison
+                date_str = episode.date or "0000-00-00"
+                date_int = int(date_str.replace("-", "")) if "-" in date_str else 0
+
                 metadatas.append({
                     "episode_id": episode_id,
                     "section": section,
                     "timestamp": timestamp,
-                    "date": episode.date,
+                    "date": date_str,
+                    "date_int": date_int,
                     "title": episode.title,
                     "chunk_index": i,
                     "season_id": int(episode.season_id) if episode.season_id is not None else -1,

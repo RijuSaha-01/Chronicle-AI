@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 import dateparser
 from dateparser.search import search_dates
 from .semantic_search import get_semantic_search
+from .llm_client import get_llm_client
 from .repository import get_repository
 from .models import ChatMessage
 
