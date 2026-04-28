@@ -62,6 +62,8 @@ class EntryResponse(BaseModel):
     style: Optional[str] = None
     characters: List[str] = []
     locations: List[str] = []
+    audio_path: Optional[str] = None
+    audio_duration: Optional[float] = None
     
     class Config:
         from_attributes = True
@@ -172,6 +174,16 @@ static_path = Path(__file__).parent.parent.parent / "static"
 if static_path.exists():
     app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
 
+# Serve data files (images)
+data_path = Path(__file__).parent.parent.parent / "data"
+if data_path.exists():
+    app.mount("/data", StaticFiles(directory=str(data_path)), name="data")
+
+# Serve exports (audio)
+exports_path = Path(__file__).parent.parent.parent / "exports"
+if exports_path.exists():
+    app.mount("/exports", StaticFiles(directory=str(exports_path)), name="exports")
+
 
 # =============================================================================
 # API Endpoints
@@ -246,7 +258,12 @@ async def create_entry(body: EntryCreate):
         synopsis=entry.synopsis,
         keywords=entry.keywords,
         characters=entry.characters,
-        locations=entry.locations
+        locations=entry.locations,
+        cover_art_path=entry.cover_art_path,
+        image_variants=entry.image_variants,
+        mood=entry.mood,
+        audio_path=entry.audio_path,
+        audio_duration=entry.audio_duration
     )
 
 
@@ -298,7 +315,12 @@ async def create_guided_entry(body: GuidedEntryCreate):
         synopsis=entry.synopsis,
         keywords=entry.keywords,
         characters=entry.characters,
-        locations=entry.locations
+        locations=entry.locations,
+        cover_art_path=entry.cover_art_path,
+        image_variants=entry.image_variants,
+        mood=entry.mood,
+        audio_path=entry.audio_path,
+        audio_duration=entry.audio_duration
     )
 
 
@@ -334,7 +356,12 @@ async def list_entries(
                 keywords=e.keywords,
                 characters=e.characters,
                 locations=e.locations,
-                conflict_data=e.conflict_data.to_dict() if e.conflict_data else None
+                conflict_data=e.conflict_data.to_dict() if e.conflict_data else None,
+                cover_art_path=e.cover_art_path,
+                image_variants=e.image_variants,
+                mood=e.mood,
+                audio_path=e.audio_path,
+                audio_duration=e.audio_duration
             )
             for e in entries
         ],
@@ -444,7 +471,12 @@ async def get_entry(entry_id: int):
         synopsis=entry.synopsis,
         keywords=entry.keywords,
         characters=entry.characters,
-        locations=entry.locations
+        locations=entry.locations,
+        cover_art_path=entry.cover_art_path,
+        image_variants=entry.image_variants,
+        mood=entry.mood,
+        audio_path=entry.audio_path,
+        audio_duration=entry.audio_duration
     )
 
 
@@ -568,7 +600,12 @@ async def regenerate_entry(entry_id: int):
         synopsis=entry.synopsis,
         keywords=entry.keywords,
         characters=entry.characters,
-        locations=entry.locations
+        locations=entry.locations,
+        cover_art_path=entry.cover_art_path,
+        image_variants=entry.image_variants,
+        mood=entry.mood,
+        audio_path=entry.audio_path,
+        audio_duration=entry.audio_duration
     )
 
 
@@ -665,7 +702,9 @@ async def get_gallery(
                 cover_art_path=e.cover_art_path,
                 image_variants=e.image_variants,
                 mood=e.mood,
-                style=e.style
+                style=e.style,
+                audio_path=e.audio_path,
+                audio_duration=e.audio_duration
             )
             for e in entries
         ],
@@ -698,7 +737,9 @@ async def get_season_gallery(season_id: int, limit: int = 50):
                 cover_art_path=e.cover_art_path,
                 image_variants=e.image_variants,
                 mood=e.mood,
-                style=e.style
+                style=e.style,
+                audio_path=e.audio_path,
+                audio_duration=e.audio_duration
             )
             for e in entries
         ],
