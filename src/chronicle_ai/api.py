@@ -109,6 +109,26 @@ class ExportResponse(BaseModel):
     message: str
 
 
+class SeasonResponse(BaseModel):
+    """Response schema for a season."""
+    id: int
+    title: str
+    start_date: str
+    end_date: str
+    episode_count: int
+    dominant_themes: List[str] = []
+    description: Optional[str] = None
+    poster_path: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+
+
+class SeasonListResponse(BaseModel):
+    """Response schema for season list."""
+    seasons: List[SeasonResponse]
+
+
 class MemoryChatQuestion(BaseModel):
     """Request body for memory chat."""
     question: str
@@ -744,6 +764,31 @@ async def get_season_gallery(season_id: int, limit: int = 50):
             for e in entries
         ],
         total=len(entries)
+    )
+
+
+@app.get("/seasons", response_model=SeasonListResponse)
+async def list_seasons():
+    """
+    List all seasons.
+    """
+    repo = get_repository()
+    seasons = repo.list_seasons()
+    
+    return SeasonListResponse(
+        seasons=[
+            SeasonResponse(
+                id=s.id,
+                title=s.title,
+                start_date=s.start_date,
+                end_date=s.end_date,
+                episode_count=s.episode_count,
+                dominant_themes=s.dominant_themes,
+                description=s.description,
+                poster_path=s.poster_path
+            )
+            for s in seasons
+        ]
     )
 
 

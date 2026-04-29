@@ -32,6 +32,7 @@ class Store {
 const GLOBAL_STORE = new Store({
     currentView: 'episodes',
     episodes: [],
+    seasons: [],
     isLoading: false,
     aiOnline: false,
     currentEpisode: null, // For modal or detail view

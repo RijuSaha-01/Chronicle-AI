@@ -35,13 +35,64 @@ const APP = {
 
         // Initial render
         this.render(GLOBAL_STORE.getState());
+        
+        // Keyboard shortcuts & Navigation
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                const modal = document.getElementById('modal-episode');
+                if (modal) modal.classList.remove('active');
+            }
+
+            // Arrow Key Navigation for Netflix-style browsing
+            if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+                const focused = document.activeElement;
+                if (focused && focused.classList.contains('netflix-episode-card')) {
+                    e.preventDefault();
+                    const cards = Array.from(document.querySelectorAll('.netflix-episode-card'));
+                    const index = cards.indexOf(focused);
+                    
+                    if (e.key === 'ArrowRight' && index < cards.length - 1) {
+                        cards[index + 1].focus();
+                        cards[index + 1].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                    } else if (e.key === 'ArrowLeft' && index > 0) {
+                        cards[index - 1].focus();
+                        cards[index - 1].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                    } else if (e.key === 'ArrowDown') {
+                        // Try to find card below (next row)
+                        const nextRowCard = cards.find((c, i) => i > index && c.getBoundingClientRect().top > focused.getBoundingClientRect().bottom);
+                        if (nextRowCard) {
+                            nextRowCard.focus();
+                            nextRowCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                    } else if (e.key === 'ArrowUp') {
+                        // Try to find card above (prev row)
+                        const prevRowCard = [...cards].reverse().find((c, i) => cards.length - 1 - i < index && c.getBoundingClientRect().bottom < focused.getBoundingClientRect().top);
+                        if (prevRowCard) {
+                            prevRowCard.focus();
+                            prevRowCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                    }
+                } else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
+                    // Initial focus if nothing is focused
+                    const firstCard = document.querySelector('.netflix-episode-card');
+                    if (firstCard) firstCard.focus();
+                }
+            }
+        });
     },
 
     async refreshData() {
         GLOBAL_STORE.setState({ isLoading: true });
         try {
-            const data = await API.getEpisodes();
-            GLOBAL_STORE.setState({ episodes: data.entries || [], isLoading: false });
+            const [episodesData, seasonsData] = await Promise.all([
+                API.getEpisodes(100),
+                API.getSeasons()
+            ]);
+            GLOBAL_STORE.setState({ 
+                episodes: episodesData.entries || [], 
+                seasons: seasonsData.seasons || [],
+                isLoading: false 
+            });
         } catch (error) {
             this.showToast(error.message, 'error');
             GLOBAL_STORE.setState({ isLoading: false });

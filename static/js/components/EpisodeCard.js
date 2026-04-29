@@ -33,12 +33,22 @@ export const EpisodeCard = (episode, onClick) => {
 
     const card = document.createElement('div');
     card.className = 'netflix-episode-card';
+    card.tabIndex = 0; // Make focusable
     
+    const progress = episode.playback_position && episode.audio_duration 
+        ? (episode.playback_position / episode.audio_duration) * 100 
+        : 0;
+
     card.innerHTML = `
         <div class="episode-card-thumbnail">
             <img src="${coverArt}" alt="${title}" loading="lazy" class="episode-img">
             <div class="episode-mood-accent" style="background: ${moodColor}"></div>
             <div class="episode-duration">${duration}</div>
+            ${progress > 0 ? `
+                <div class="episode-progress-container">
+                    <div class="episode-progress-fill" style="width: ${progress}%"></div>
+                </div>
+            ` : ''}
             <div class="episode-overlay-bottom">
                 <h3 class="episode-card-title">${title}</h3>
             </div>
@@ -57,8 +67,12 @@ export const EpisodeCard = (episode, onClick) => {
     `;
 
     card.addEventListener('click', (e) => {
-        // If clicking the play button specifically, we still trigger the click handler
         onClick(episode.id);
+    });
+
+    // Handle Enter key for keyboard navigation
+    card.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') onClick(episode.id);
     });
 
     return card;

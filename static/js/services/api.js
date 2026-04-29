@@ -30,6 +30,10 @@ const API = {
         return await this.call(`/entries?limit=${limit}`);
     },
 
+    async getSeasons() {
+        return await this.call('/seasons');
+    },
+
     async getEpisode(id) {
         return await this.call(`/entries/${id}`);
     },
