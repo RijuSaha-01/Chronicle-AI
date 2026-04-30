@@ -35,7 +35,8 @@ const GLOBAL_STORE = new Store({
     seasons: [],
     isLoading: false,
     aiOnline: false,
-    currentEpisode: null, // For modal or detail view
+    currentEpisode: null, 
+    selectedEpisodeId: null,
     toast: null
 });
 

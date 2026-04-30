@@ -5,6 +5,7 @@ import API from './services/api.js';
 import GLOBAL_STORE from './services/store.js';
 import { HomeView } from './views/HomeView.js';
 import { CreateView } from './views/CreateView.js';
+import { EpisodeDetailView } from './views/EpisodeDetailView.js';
 import { AudioPlayer } from './components/AudioPlayer.js';
 
 const APP = {
@@ -122,6 +123,8 @@ const APP = {
             this.root.appendChild(HomeView((id) => this.handleEpisodeClick(id)));
         } else if (state.currentView === 'create') {
             this.root.appendChild(CreateView((data) => this.handleCreate(data)));
+        } else if (state.currentView === 'episodeDetail') {
+            this.root.appendChild(EpisodeDetailView(state.selectedEpisodeId, (id) => this.handleEpisodeClick(id)));
         }
 
         // Handle Audio Player
@@ -132,14 +135,11 @@ const APP = {
     },
 
     async handleEpisodeClick(id) {
-        try {
-            const episode = await API.getEpisode(id);
-            GLOBAL_STORE.setState({ currentEpisode: episode });
-            // For now, opening detailed info could still be the modal
-            this.openModal(episode);
-        } catch (error) {
-            this.showToast('Failed to load episode details', 'error');
-        }
+        GLOBAL_STORE.setState({ 
+            selectedEpisodeId: id,
+            currentView: 'episodeDetail'
+        });
+        window.scrollTo(0, 0);
     },
 
     async handleCreate(data) {
