@@ -128,9 +128,12 @@ const APP = {
         }
 
         // Handle Audio Player
-        if (state.currentEpisode && !document.querySelector('.netflix-player-bar')) {
-            this.playerContainer.innerHTML = '';
-            this.playerContainer.appendChild(AudioPlayer(state.currentEpisode));
+        if (state.currentEpisode) {
+            const playerEl = AudioPlayer(state.currentEpisode);
+            if (playerEl && !this.playerContainer.contains(playerEl)) {
+                this.playerContainer.innerHTML = '';
+                this.playerContainer.appendChild(playerEl);
+            }
         }
     },
 
