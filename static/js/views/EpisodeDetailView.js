@@ -70,6 +70,7 @@ function createHero(episode) {
             <h1 class="hero-title">${episode.title || 'Untitled Episode'}</h1>
             <div class="hero-actions">
                 <button class="btn-netflix primary play-trigger">▶ Play Episode</button>
+                <button class="btn-netflix secondary reading-trigger">📖 Reading Mode</button>
                 <button class="btn-netflix secondary regenerate-trigger">↻ Regenerate</button>
             </div>
         </div>
@@ -77,6 +78,10 @@ function createHero(episode) {
 
     hero.querySelector('.play-trigger').onclick = () => {
         GLOBAL_STORE.setState({ currentEpisode: episode });
+    };
+
+    hero.querySelector('.reading-trigger').onclick = () => {
+        GLOBAL_STORE.setState({ currentView: 'readingMode' });
     };
 
     hero.querySelector('.regenerate-trigger').onclick = async () => {

@@ -6,6 +6,7 @@ import GLOBAL_STORE from './services/store.js';
 import { HomeView } from './views/HomeView.js';
 import { CreateView } from './views/CreateView.js';
 import { EpisodeDetailView } from './views/EpisodeDetailView.js';
+import { ReadingModeView } from './views/ReadingModeView.js';
 import { AudioPlayer } from './components/AudioPlayer.js';
 
 const APP = {
@@ -125,6 +126,8 @@ const APP = {
             this.root.appendChild(CreateView((data) => this.handleCreate(data)));
         } else if (state.currentView === 'episodeDetail') {
             this.root.appendChild(EpisodeDetailView(state.selectedEpisodeId, (id) => this.handleEpisodeClick(id)));
+        } else if (state.currentView === 'readingMode') {
+            this.root.appendChild(ReadingModeView(state.selectedEpisodeId));
         }
 
         // Handle Audio Player
