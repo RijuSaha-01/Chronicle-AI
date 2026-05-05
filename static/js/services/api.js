@@ -71,6 +71,16 @@ const API = {
         } catch {
             return false;
         }
+    },
+
+    async search(query, filters = {}, limit = 20) {
+        let url = `/search?q=${encodeURIComponent(query)}&limit=${limit}`;
+        if (filters.start_date) url += `&start_date=${filters.start_date}`;
+        if (filters.end_date) url += `&end_date=${filters.end_date}`;
+        if (filters.season) url += `&season=${filters.season}`;
+        if (filters.mood) url += `&mood=${filters.mood}`;
+        if (filters.themes) url += `&themes=${filters.themes}`;
+        return await this.call(url);
     }
 };
 

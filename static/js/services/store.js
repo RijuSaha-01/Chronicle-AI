@@ -37,7 +37,20 @@ const GLOBAL_STORE = new Store({
     aiOnline: false,
     currentEpisode: null, 
     selectedEpisodeId: null,
-    toast: null
+    toast: null,
+    // Search State
+    searchQuery: '',
+    searchResults: [],
+    searchFilters: {
+        start_date: '',
+        end_date: '',
+        season: '',
+        mood: '',
+        themes: ''
+    },
+    isSearching: false,
+    searchViewMode: 'grid', // 'grid' or 'list'
+    recentSearches: JSON.parse(localStorage.getItem('recentSearches') || '[]')
 });
 
 export default GLOBAL_STORE;

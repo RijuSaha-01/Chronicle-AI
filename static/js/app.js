@@ -7,6 +7,7 @@ import { HomeView } from './views/HomeView.js';
 import { CreateView } from './views/CreateView.js';
 import { EpisodeDetailView } from './views/EpisodeDetailView.js';
 import { ReadingModeView } from './views/ReadingModeView.js';
+import { SearchView } from './views/SearchView.js';
 import { AudioPlayer } from './components/AudioPlayer.js';
 
 const APP = {
@@ -16,6 +17,8 @@ const APP = {
         this.root = document.getElementById('app-root');
         this.navLinks = document.querySelectorAll('.nav-link');
         this.playerContainer = document.getElementById('audio-player-root');
+        this.searchBar = document.getElementById('header-search');
+        this.searchDropdown = document.getElementById('search-live-results');
         
         // Initial state load
         await this.refreshData();
@@ -31,6 +34,31 @@ const APP = {
             };
         });
 
+        // Search Bar Logic
+        let debounceTimer;
+        this.searchBar.oninput = (e) => {
+            const query = e.target.value;
+            clearTimeout(debounceTimer);
+            if (query.length > 2) {
+                debounceTimer = setTimeout(() => this.performLiveSearch(query), 300);
+            } else {
+                this.searchDropdown.classList.remove('active');
+            }
+        };
+
+        this.searchBar.onkeydown = (e) => {
+            if (e.key === 'Enter') {
+                this.triggerFullSearch(this.searchBar.value);
+            }
+        };
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!this.searchBar.contains(e.target) && !this.searchDropdown.contains(e.target)) {
+                this.searchDropdown.classList.remove('active');
+            }
+        });
+
         // AI Status Check
         this.checkStatus();
         setInterval(() => this.checkStatus(), 30000);
@@ -40,17 +68,25 @@ const APP = {
         
         // Keyboard shortcuts & Navigation
         document.addEventListener('keydown', (e) => {
+            // '/' to focus search
+            if (e.key === '/' && document.activeElement !== this.searchBar) {
+                e.preventDefault();
+                this.searchBar.focus();
+            }
+
             if (e.key === 'Escape') {
                 const modal = document.getElementById('modal-episode');
                 if (modal) modal.classList.remove('active');
+                this.searchDropdown.classList.remove('active');
+                this.searchBar.blur();
             }
 
             // Arrow Key Navigation for Netflix-style browsing
             if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
                 const focused = document.activeElement;
-                if (focused && focused.classList.contains('netflix-episode-card')) {
+                if (focused && (focused.classList.contains('netflix-episode-card') || focused.classList.contains('result-card-list'))) {
                     e.preventDefault();
-                    const cards = Array.from(document.querySelectorAll('.netflix-episode-card'));
+                    const cards = Array.from(document.querySelectorAll('.netflix-episode-card, .result-card-list'));
                     const index = cards.indexOf(focused);
                     
                     if (e.key === 'ArrowRight' && index < cards.length - 1) {
@@ -60,27 +96,89 @@ const APP = {
                         cards[index - 1].focus();
                         cards[index - 1].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
                     } else if (e.key === 'ArrowDown') {
-                        // Try to find card below (next row)
-                        const nextRowCard = cards.find((c, i) => i > index && c.getBoundingClientRect().top > focused.getBoundingClientRect().bottom);
-                        if (nextRowCard) {
-                            nextRowCard.focus();
-                            nextRowCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        }
+                        // For list view or next row in grid
+                        if (index < cards.length - 1) cards[index + 1].focus();
                     } else if (e.key === 'ArrowUp') {
-                        // Try to find card above (prev row)
-                        const prevRowCard = [...cards].reverse().find((c, i) => cards.length - 1 - i < index && c.getBoundingClientRect().bottom < focused.getBoundingClientRect().top);
-                        if (prevRowCard) {
-                            prevRowCard.focus();
-                            prevRowCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        }
+                        if (index > 0) cards[index - 1].focus();
                     }
-                } else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
-                    // Initial focus if nothing is focused
-                    const firstCard = document.querySelector('.netflix-episode-card');
-                    if (firstCard) firstCard.focus();
                 }
             }
         });
+    },
+
+    async performLiveSearch(query) {
+        try {
+            const results = await API.search(query, {}, 5);
+            this.renderLiveResults(results.results || []);
+        } catch (error) {
+            console.error('Live search failed:', error);
+        }
+    },
+
+    renderLiveResults(results) {
+        if (results.length === 0) {
+            this.searchDropdown.classList.remove('active');
+            return;
+        }
+
+        this.searchDropdown.innerHTML = results.map(res => `
+            <div class="search-item" data-id="${res.episode_id}">
+                <img src="${res.metadata?.cover_art_path || '/static/img/placeholder.jpg'}" class="search-item-thumb">
+                <div class="search-item-info">
+                    <div class="search-item-title">${res.title}</div>
+                    <div class="search-item-snippet">${res.highlighted_text}</div>
+                </div>
+            </div>
+        `).join('') + `
+            <div class="search-item search-see-all">
+                <div style="text-align: center; width: 100%; color: var(--netflix-gold); font-size: 0.8rem; font-weight: 600;">
+                    See all results for "${this.searchBar.value}"
+                </div>
+            </div>
+        `;
+
+        this.searchDropdown.classList.add('active');
+
+        this.searchDropdown.querySelectorAll('.search-item').forEach(item => {
+            item.onclick = () => {
+                if (item.classList.contains('search-see-all')) {
+                    this.triggerFullSearch(this.searchBar.value);
+                } else {
+                    this.handleEpisodeClick(item.dataset.id);
+                }
+                this.searchDropdown.classList.remove('active');
+            };
+        });
+    },
+
+    async triggerFullSearch(query) {
+        if (!query) return;
+        this.searchDropdown.classList.remove('active');
+        this.searchBar.blur();
+        
+        GLOBAL_STORE.setState({ 
+            isSearching: true, 
+            searchQuery: query,
+            currentView: 'search'
+        });
+
+        try {
+            const results = await API.search(query, GLOBAL_STORE.getState().searchFilters);
+            
+            // Update recent searches
+            let recent = GLOBAL_STORE.getState().recentSearches;
+            recent = [query, ...recent.filter(s => s !== query)].slice(0, 5);
+            localStorage.setItem('recentSearches', JSON.stringify(recent));
+
+            GLOBAL_STORE.setState({ 
+                searchResults: results.results || [], 
+                isSearching: false,
+                recentSearches: recent
+            });
+        } catch (error) {
+            this.showToast('Search failed', 'error');
+            GLOBAL_STORE.setState({ isSearching: false });
+        }
     },
 
     async refreshData() {
@@ -128,6 +226,8 @@ const APP = {
             this.root.appendChild(EpisodeDetailView(state.selectedEpisodeId, (id) => this.handleEpisodeClick(id)));
         } else if (state.currentView === 'readingMode') {
             this.root.appendChild(ReadingModeView(state.selectedEpisodeId));
+        } else if (state.currentView === 'search') {
+            this.root.appendChild(SearchView((id) => this.handleEpisodeClick(id)));
         }
 
         // Handle Audio Player
