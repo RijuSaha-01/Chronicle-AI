@@ -132,12 +132,30 @@ class SeasonListResponse(BaseModel):
 class MemoryChatQuestion(BaseModel):
     """Request body for memory chat."""
     question: str
+    session_id: Optional[int] = None
 
 
 class MemoryChatResponse(BaseModel):
     """Response schema for memory chat."""
     answer: str
     sources: List[SearchResultResponse]
+    session_id: Optional[int] = None
+
+
+class ChatMessageResponse(BaseModel):
+    """Schema for a single chat message."""
+    role: str
+    content: str
+    timestamp: str
+
+
+class ChatSessionResponse(BaseModel):
+    """Schema for a chat session."""
+    id: int
+    title: str
+    created_at: str
+    last_updated: str
+    messages: List[ChatMessageResponse] = []
 
 
 class ArcMilestoneResponse(BaseModel):
@@ -433,7 +451,7 @@ async def ask_memory(body: MemoryChatQuestion):
     """
     from .memory_chat import get_memory_chat
     
-    chat = get_memory_chat()
+    chat = get_memory_chat(session_id=body.session_id)
     response = chat.ask(body.question)
     
     formatted_sources = []
@@ -442,8 +460,62 @@ async def ask_memory(body: MemoryChatQuestion):
         
     return MemoryChatResponse(
         answer=response.answer,
-        sources=formatted_sources
+        sources=formatted_sources,
+        session_id=chat.session_id
     )
+
+
+@app.get("/chat/sessions", response_model=List[ChatSessionResponse])
+async def list_chat_sessions(limit: int = Query(20, ge=1, le=100)):
+    """Get recent chat sessions."""
+    repo = get_repository()
+    sessions = repo.list_chat_sessions(limit=limit)
+    return [
+        ChatSessionResponse(
+            id=s.id,
+            title=s.title,
+            created_at=s.created_at,
+            last_updated=s.last_updated,
+            messages=[
+                ChatMessageResponse(role=m.role, content=m.content, timestamp=m.timestamp)
+                for m in s.messages
+            ]
+        ) for s in sessions
+    ]
+
+
+@app.get("/chat/sessions/{session_id}", response_model=ChatSessionResponse)
+async def get_chat_session(session_id: int):
+    """Get a specific chat session with its messages."""
+    repo = get_repository()
+    session = repo.get_chat_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail=f"Chat session {session_id} not found")
+    return ChatSessionResponse(
+        id=session.id,
+        title=session.title,
+        created_at=session.created_at,
+        last_updated=session.last_updated,
+        messages=[
+            ChatMessageResponse(role=m.role, content=m.content, timestamp=m.timestamp)
+            for m in session.messages
+        ]
+    )
+
+
+@app.delete("/chat/sessions/{session_id}", status_code=204)
+async def delete_chat_session(session_id: int):
+    """Delete a specific chat session."""
+    repo = get_repository()
+    session = repo.get_chat_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail=f"Chat session {session_id} not found")
+    
+    conn = repo._get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM chat_sessions WHERE id = ?", (session_id,))
+    conn.commit()
+    conn.close()
 
 
 @app.get("/arc", response_model=ArcSummaryResponse)

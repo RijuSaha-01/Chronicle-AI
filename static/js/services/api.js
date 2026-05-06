@@ -81,6 +81,27 @@ const API = {
         if (filters.mood) url += `&mood=${filters.mood}`;
         if (filters.themes) url += `&themes=${filters.themes}`;
         return await this.call(url);
+    },
+
+    async ask(question, sessionId = null) {
+        return await this.call('/ask', {
+            method: 'POST',
+            body: JSON.stringify({ question, session_id: sessionId })
+        });
+    },
+
+    async getChatSessions() {
+        return await this.call('/chat/sessions');
+    },
+
+    async getChatSession(sessionId) {
+        return await this.call(`/chat/sessions/${sessionId}`);
+    },
+
+    async deleteChatSession(sessionId) {
+        return await this.call(`/chat/sessions/${sessionId}`, {
+            method: 'DELETE'
+        });
     }
 };
 

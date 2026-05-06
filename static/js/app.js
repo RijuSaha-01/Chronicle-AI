@@ -8,6 +8,7 @@ import { CreateView } from './views/CreateView.js';
 import { EpisodeDetailView } from './views/EpisodeDetailView.js';
 import { ReadingModeView } from './views/ReadingModeView.js';
 import { SearchView } from './views/SearchView.js';
+import { ChatView } from './views/ChatView.js';
 import { AudioPlayer } from './components/AudioPlayer.js';
 
 const APP = {
@@ -228,6 +229,8 @@ const APP = {
             this.root.appendChild(ReadingModeView(state.selectedEpisodeId));
         } else if (state.currentView === 'search') {
             this.root.appendChild(SearchView((id) => this.handleEpisodeClick(id)));
+        } else if (state.currentView === 'chat') {
+            this.root.appendChild(ChatView((id) => this.handleEpisodeClick(id)));
         }
 
         // Handle Audio Player
