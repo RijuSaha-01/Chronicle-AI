@@ -14,7 +14,7 @@ from .models import Entry, ConflictAnalysis, Recap, Season, SeasonArc, ChatMessa
 
 
 # All columns for the diary_entries table to ensure consistency in SELECT queries
-ENTRY_COLUMNS = "id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, themes, characters, locations, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style, needs_image_retry, is_placeholder, audio_duration, audio_path, audio_file_size, audio_generation_date, cluster_label"
+ENTRY_COLUMNS = "id, date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, themes, characters, locations, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style, needs_image_retry, is_placeholder, audio_duration, audio_path, audio_file_size, audio_generation_date, cluster_label, playback_position"
 
 
 # Default database location (can be overridden via environment variable)
@@ -106,6 +106,8 @@ class EntryRepository:
                 cursor.execute("ALTER TABLE diary_entries ADD COLUMN audio_generation_date TEXT")
             if 'cluster_label' not in columns:
                 cursor.execute("ALTER TABLE diary_entries ADD COLUMN cluster_label TEXT")
+            if 'playback_position' not in columns:
+                cursor.execute("ALTER TABLE diary_entries ADD COLUMN playback_position REAL DEFAULT 0.0")
             
             # Create recaps table if it doesn't exist
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='recaps'")
@@ -216,7 +218,8 @@ class EntryRepository:
                     audio_generation_date TEXT,
                     characters TEXT,
                     locations TEXT,
-                    cluster_label TEXT
+                    cluster_label TEXT,
+                    playback_position REAL DEFAULT 0.0
                 )
             """)
             cursor.execute("""
@@ -306,8 +309,8 @@ class EntryRepository:
         cursor = conn.cursor()
         
         cursor.execute(
-            """INSERT INTO diary_entries (date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, themes, characters, locations, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style, needs_image_retry, is_placeholder, audio_duration, audio_path, audio_file_size, audio_generation_date, cluster_label) 
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO diary_entries (date, raw_text, narrative_text, title, title_options, logline, synopsis, keywords, themes, characters, locations, conflict_data, recap_id, season_id, cover_art_path, image_variants, cover_history, mood, style, needs_image_retry, is_placeholder, audio_duration, audio_path, audio_file_size, audio_generation_date, cluster_label, playback_position) 
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 entry.date, 
                 entry.raw_text, 
@@ -334,7 +337,8 @@ class EntryRepository:
                 entry.audio_path,
                 entry.audio_file_size,
                 entry.audio_generation_date,
-                entry.cluster_label
+                entry.cluster_label,
+                entry.playback_position
             )
         )
         
@@ -362,7 +366,7 @@ class EntryRepository:
         
         cursor.execute(
             """UPDATE diary_entries 
-               SET date = ?, raw_text = ?, narrative_text = ?, title = ?, title_options = ?, logline = ?, synopsis = ?, keywords = ?, themes = ?, characters = ?, locations = ?, conflict_data = ?, recap_id = ?, season_id = ?, cover_art_path = ?, image_variants = ?, cover_history = ?, mood = ?, style = ?, needs_image_retry = ?, is_placeholder = ?, audio_duration = ?, audio_path = ?, audio_file_size = ?, audio_generation_date = ?, cluster_label = ?
+               SET date = ?, raw_text = ?, narrative_text = ?, title = ?, title_options = ?, logline = ?, synopsis = ?, keywords = ?, themes = ?, characters = ?, locations = ?, conflict_data = ?, recap_id = ?, season_id = ?, cover_art_path = ?, image_variants = ?, cover_history = ?, mood = ?, style = ?, needs_image_retry = ?, is_placeholder = ?, audio_duration = ?, audio_path = ?, audio_file_size = ?, audio_generation_date = ?, cluster_label = ?, playback_position = ?
                WHERE id = ?""",
             (
                 entry.date, 
@@ -391,6 +395,7 @@ class EntryRepository:
                 entry.audio_file_size,
                 entry.audio_generation_date,
                 entry.cluster_label,
+                entry.playback_position,
                 entry.id
             )
         )

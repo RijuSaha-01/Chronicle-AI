@@ -2,6 +2,7 @@
  * AudioPlayer Component - Spotify/Netflix Style
  * Handles persistent audio playback with cinematic controls.
  */
+import GLOBAL_STORE from '../services/store.js';
 
 class AudioPlayerManager {
     constructor() {
@@ -9,15 +10,24 @@ class AudioPlayerManager {
         this.currentEpisode = null;
         this.isCollapsed = false;
         this.container = null;
+        this._lastSaveTime = 0;
         this.setupListeners();
     }
 
     setupListeners() {
-        this.audio.addEventListener('timeupdate', () => this.updateProgress());
+        this.audio.addEventListener('timeupdate', () => {
+            this.updateProgress();
+            this.reportProgressThrottled();
+        });
         this.audio.addEventListener('loadedmetadata', () => this.updateDuration());
         this.audio.addEventListener('ended', () => this.handleEnded());
         this.audio.addEventListener('play', () => this.updatePlayPauseIcon(true));
-        this.audio.addEventListener('pause', () => this.updatePlayPauseIcon(false));
+        this.audio.addEventListener('pause', () => {
+            this.updatePlayPauseIcon(false);
+            if (this.currentEpisode) {
+                this.saveProgress(this.currentEpisode.id, this.audio.currentTime);
+            }
+        });
 
         // Keyboard Shortcut: Space for play/pause
         document.addEventListener('keydown', (e) => {
@@ -34,9 +44,16 @@ class AudioPlayerManager {
         // If it's a new episode, load it
         if (!this.currentEpisode || this.currentEpisode.id !== episode.id) {
             this.currentEpisode = episode;
-            // In a real app, episode.audio_url would be used. 
-            // For demo, we'll use a placeholder if not provided.
-            this.audio.src = episode.audio_url || 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3';
+            // Use episode.audio_path if provided, otherwise fallback placeholder
+            this.audio.src = episode.audio_path || 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3';
+            
+            // Wait for metadata to load before seeking
+            this.audio.addEventListener('loadedmetadata', () => {
+                if (episode.playback_position && episode.playback_position > 0) {
+                    this.audio.currentTime = episode.playback_position;
+                }
+            }, { once: true });
+
             this.audio.play();
         }
 
@@ -48,6 +65,38 @@ class AudioPlayerManager {
 
         this.updateUI();
         return this.container;
+    }
+
+    reportProgressThrottled() {
+        if (!this.currentEpisode) return;
+        const now = Date.now();
+        if (now - this._lastSaveTime > 3000) {
+            this._lastSaveTime = now;
+            this.saveProgress(this.currentEpisode.id, this.audio.currentTime);
+        }
+    }
+
+    async saveProgress(episodeId, position) {
+        try {
+            await fetch(`/entries/${episodeId}/progress`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ position })
+            });
+            // Update the episode playback_position in the global store
+            const state = GLOBAL_STORE.getState();
+            if (state && state.episodes) {
+                const updatedEpisodes = state.episodes.map(ep => {
+                    if (ep.id === episodeId) {
+                        return { ...ep, playback_position: position };
+                    }
+                    return ep;
+                });
+                GLOBAL_STORE.setState({ episodes: updatedEpisodes });
+            }
+        } catch (error) {
+            console.error('Failed to save playback progress:', error);
+        }
     }
 
     updateUI() {
@@ -66,9 +115,9 @@ class AudioPlayerManager {
                 </button>
                 
                 <div class="player-info">
-                    <img src="${this.currentEpisode.cover_url || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=200&h=200&fit=crop'}" class="player-thumbnail" alt="Cover">
+                    <img src="${this.currentEpisode.cover_art_path || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=200&h=200&fit=crop'}" class="player-thumbnail" alt="Cover">
                     <div class="player-text">
-                        <span class="player-episode-title">${this.currentEpisode.title}</span>
+                        <span class="player-episode-title">${this.currentEpisode.title || 'Untitled Story'}</span>
                         <span class="player-series">Chronicle AI • Narrating Life</span>
                     </div>
                 </div>
@@ -230,6 +279,9 @@ class AudioPlayerManager {
 
     handleEnded() {
         this.updatePlayPauseIcon(false);
+        if (this.currentEpisode) {
+            this.saveProgress(this.currentEpisode.id, 0); // Reset progress when done
+        }
     }
 
     formatTime(seconds) {

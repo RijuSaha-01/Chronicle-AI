@@ -64,6 +64,7 @@ class EntryResponse(BaseModel):
     locations: List[str] = []
     audio_path: Optional[str] = None
     audio_duration: Optional[float] = None
+    playback_position: Optional[float] = 0.0
     
     class Config:
         from_attributes = True
@@ -301,7 +302,8 @@ async def create_entry(body: EntryCreate):
         image_variants=entry.image_variants,
         mood=entry.mood,
         audio_path=entry.audio_path,
-        audio_duration=entry.audio_duration
+        audio_duration=entry.audio_duration,
+        playback_position=entry.playback_position
     )
 
 
@@ -358,7 +360,8 @@ async def create_guided_entry(body: GuidedEntryCreate):
         image_variants=entry.image_variants,
         mood=entry.mood,
         audio_path=entry.audio_path,
-        audio_duration=entry.audio_duration
+        audio_duration=entry.audio_duration,
+        playback_position=entry.playback_position
     )
 
 
@@ -399,7 +402,8 @@ async def list_entries(
                 image_variants=e.image_variants,
                 mood=e.mood,
                 audio_path=e.audio_path,
-                audio_duration=e.audio_duration
+                audio_duration=e.audio_duration,
+                playback_position=e.playback_position
             )
             for e in entries
         ],
@@ -568,7 +572,8 @@ async def get_entry(entry_id: int):
         image_variants=entry.image_variants,
         mood=entry.mood,
         audio_path=entry.audio_path,
-        audio_duration=entry.audio_duration
+        audio_duration=entry.audio_duration,
+        playback_position=entry.playback_position
     )
 
 
@@ -697,7 +702,8 @@ async def regenerate_entry(entry_id: int):
         image_variants=entry.image_variants,
         mood=entry.mood,
         audio_path=entry.audio_path,
-        audio_duration=entry.audio_duration
+        audio_duration=entry.audio_duration,
+        playback_position=entry.playback_position
     )
 
 
@@ -796,7 +802,8 @@ async def get_gallery(
                 mood=e.mood,
                 style=e.style,
                 audio_path=e.audio_path,
-                audio_duration=e.audio_duration
+                audio_duration=e.audio_duration,
+                playback_position=e.playback_position
             )
             for e in entries
         ],
@@ -831,7 +838,8 @@ async def get_season_gallery(season_id: int, limit: int = 50):
                 mood=e.mood,
                 style=e.style,
                 audio_path=e.audio_path,
-                audio_duration=e.audio_duration
+                audio_duration=e.audio_duration,
+                playback_position=e.playback_position
             )
             for e in entries
         ],
@@ -862,6 +870,152 @@ async def list_seasons():
             for s in seasons
         ]
     )
+
+
+class ProgressUpdate(BaseModel):
+    position: float
+
+@app.post("/entries/{entry_id}/progress")
+async def update_entry_progress(entry_id: int, body: ProgressUpdate):
+    repo = get_repository()
+    entry = repo.get_entry_by_id(entry_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail=f"Entry {entry_id} not found")
+    entry.playback_position = body.position
+    repo.update_entry(entry)
+    return {"status": "success", "playback_position": entry.playback_position}
+
+@app.get("/recommendations/homepage")
+async def get_homepage_recommendations():
+    """
+    Generate personalized homepage recommendation groups using the database and memory system.
+    """
+    import random
+    from datetime import datetime, date
+    repo = get_repository()
+    episodes = repo.list_entries()
+    
+    if not episodes:
+        return {
+            "hero": None,
+            "continue_listening": [],
+            "similar_recommendations": {
+                "reference_title": "",
+                "episodes": []
+            },
+            "theme_journeys": [],
+            "on_this_day": [],
+            "season_highlights": [],
+            "flashback": None
+        }
+
+    # 1. Hero: Featured episode (highest rated recent or 'on this day')
+    today = date.today()
+    on_this_day_episodes = []
+    for ep in episodes:
+        try:
+            ep_date = datetime.strptime(ep.date, "%Y-%m-%d").date()
+            if ep_date.month == today.month and ep_date.day == today.day and ep_date.year < today.year:
+                on_this_day_episodes.append(ep)
+        except Exception:
+            pass
+            
+    hero = None
+    if on_this_day_episodes:
+        hero = on_this_day_episodes[0]
+    else:
+        recent_eps = episodes[:15]
+        def get_tension(ep):
+            if ep.conflict_data and isinstance(ep.conflict_data, dict) and "tension_level" in ep.conflict_data:
+                return ep.conflict_data["tension_level"]
+            elif ep.conflict_data and hasattr(ep.conflict_data, 'tension_level'):
+                return ep.conflict_data.tension_level
+            return 1
+        recent_eps_sorted = sorted(recent_eps, key=get_tension, reverse=True)
+        if recent_eps_sorted:
+            hero = recent_eps_sorted[0]
+        else:
+            hero = episodes[0]
+
+    # 2. Continue Listening (episodes with progress > 0)
+    continue_listening = [ep for ep in episodes if ep.playback_position and ep.playback_position > 0]
+    continue_listening = sorted(continue_listening, key=lambda x: x.date, reverse=True)[:10]
+
+    # 3. Because you viewed [X] (Similar recommendations using semantic memory)
+    last_listened = None
+    listened_eps = [ep for ep in episodes if ep.playback_position and ep.playback_position > 0]
+    if listened_eps:
+        last_listened = listened_eps[0]
+    else:
+        last_listened = episodes[0]
+        
+    similar_recs = []
+    similar_reference_title = ""
+    if last_listened:
+        similar_reference_title = last_listened.title or f"Episode from {last_listened.date}"
+        try:
+            from .semantic_search import get_semantic_search
+            search_engine = get_semantic_search()
+            similar_results = search_engine.find_similar_episodes(last_listened.id, limit=6)
+            for res in similar_results:
+                matched_ep = repo.get_entry_by_id(res["episode_id"])
+                if matched_ep:
+                    similar_recs.append(matched_ep)
+        except Exception as e:
+            pass
+
+    # 4. Your [Theme] Journey for top themes
+    theme_groups = {}
+    for ep in episodes:
+        if ep.cluster_label:
+            if ep.cluster_label not in theme_groups:
+                theme_groups[ep.cluster_label] = []
+            theme_groups[ep.cluster_label].append(ep)
+            
+    theme_journeys = []
+    sorted_themes = sorted(theme_groups.items(), key=lambda x: len(x[1]), reverse=True)
+    for theme_name, group in sorted_themes[:2]:
+        theme_journeys.append({
+            "theme": theme_name,
+            "episodes": [ep.to_dict() for ep in group[:10]]
+        })
+
+    # 5. On This Day (from previous years)
+    on_this_day = [ep.to_dict() for ep in on_this_day_episodes[:10]]
+
+    # 6. Season Highlights (best episodes per season)
+    season_highlights = []
+    seasons = repo.list_seasons()
+    for s in seasons:
+        season_eps = [ep for ep in episodes if ep.season_id == s.id]
+        if season_eps:
+            def get_tension(ep):
+                if ep.conflict_data and isinstance(ep.conflict_data, dict) and "tension_level" in ep.conflict_data:
+                    return ep.conflict_data["tension_level"]
+                elif ep.conflict_data and hasattr(ep.conflict_data, 'tension_level'):
+                    return ep.conflict_data.tension_level
+                return 1
+            best_eps = sorted(season_eps, key=get_tension, reverse=True)[:6]
+            season_highlights.append({
+                "season_title": s.title,
+                "episodes": [ep.to_dict() for ep in best_eps]
+            })
+
+    # 7. Random 'Flashback' suggestion
+    flashback = random.choice(episodes) if episodes else None
+
+    return {
+        "hero": hero.to_dict() if hero else None,
+        "continue_listening": [ep.to_dict() for ep in continue_listening],
+        "similar_recommendations": {
+            "reference_title": similar_reference_title,
+            "episodes": [ep.to_dict() for ep in similar_recs]
+        },
+        "theme_journeys": theme_journeys,
+        "on_this_day": on_this_day,
+        "season_highlights": season_highlights,
+        "flashback": flashback.to_dict() if flashback else None
+    }
 
 
 # =============================================================================
