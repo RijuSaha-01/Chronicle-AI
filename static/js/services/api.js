@@ -102,6 +102,37 @@ const API = {
         return await this.call(`/chat/sessions/${sessionId}`, {
             method: 'DELETE'
         });
+    },
+
+    async getSettings() {
+        return await this.call('/settings');
+    },
+
+    async updateSettings(data) {
+        return await this.call('/settings', {
+            method: 'POST',
+            body: JSON.stringify(data)
+        });
+    },
+
+    async getStorageUsage() {
+        return await this.call('/settings/storage');
+    },
+
+    async exportAll() {
+        return await this.call('/settings/export-all', {
+            method: 'POST'
+        });
+    },
+
+    async deleteAll() {
+        return await this.call('/settings/delete-all', {
+            method: 'POST'
+        });
+    },
+
+    async getServicesStatus() {
+        return await this.call('/services/status');
     }
 };
 

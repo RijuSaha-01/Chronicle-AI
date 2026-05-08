@@ -1019,6 +1019,129 @@ async def get_homepage_recommendations():
 
 
 # =============================================================================
+# Settings & Services Status Endpoints
+# =============================================================================
+
+class SettingsUpdate(BaseModel):
+    tone_preference: Optional[str] = None
+    protagonist_name: Optional[str] = None
+    visual_style: Optional[str] = None
+    voice_profile: Optional[str] = None
+    playback_speed: Optional[float] = 1.0
+    data_location: Optional[str] = None
+
+@app.get("/settings")
+async def get_all_settings():
+    repo = get_repository()
+    conn = repo._get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT key, value FROM settings")
+    rows = cursor.fetchall()
+    conn.close()
+    
+    settings_dict = {row['key']: row['value'] for row in rows}
+    
+    # Fill defaults if missing
+    if "tone_preference" not in settings_dict:
+        settings_dict["tone_preference"] = "cinematic"
+    if "protagonist_name" not in settings_dict:
+        settings_dict["protagonist_name"] = "Protagonist"
+    if "visual_style" not in settings_dict:
+        settings_dict["visual_style"] = "cinematic"
+    if "voice_profile" not in settings_dict:
+        settings_dict["voice_profile"] = "STORYTELLER"
+    if "playback_speed" not in settings_dict:
+        settings_dict["playback_speed"] = "1.0"
+    if "data_location" not in settings_dict:
+        settings_dict["data_location"] = str(Path("data").absolute())
+        
+    return settings_dict
+
+@app.post("/settings")
+async def update_settings(body: SettingsUpdate):
+    repo = get_repository()
+    if body.tone_preference is not None:
+        repo.set_setting("tone_preference", body.tone_preference)
+    if body.protagonist_name is not None:
+        repo.set_setting("protagonist_name", body.protagonist_name)
+    if body.visual_style is not None:
+        repo.set_setting("visual_style", body.visual_style)
+    if body.voice_profile is not None:
+        repo.set_setting("voice_profile", body.voice_profile)
+    if body.playback_speed is not None:
+        repo.set_setting("playback_speed", str(body.playback_speed))
+    if body.data_location is not None:
+        repo.set_setting("data_location", body.data_location)
+        
+    return {"status": "success", "message": "Settings updated"}
+
+@app.get("/settings/storage")
+async def get_settings_storage():
+    from .storage import storage_manager
+    try:
+        stats = storage_manager.get_storage_usage()
+        return stats
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/settings/export-all")
+async def export_all_settings():
+    from .storage import storage_manager
+    try:
+        filepath = storage_manager.backup_images()
+        return {"success": True, "filepath": filepath, "message": "Full backup exported successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/settings/delete-all")
+async def delete_all_settings():
+    repo = get_repository()
+    try:
+        conn = repo._get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM diary_entries")
+        cursor.execute("DELETE FROM recaps")
+        cursor.execute("DELETE FROM seasons")
+        cursor.execute("DELETE FROM chat_messages")
+        cursor.execute("DELETE FROM chat_sessions")
+        conn.commit()
+        conn.close()
+        return {"success": True, "message": "All data cleared successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/services/status")
+async def get_services_status():
+    import requests
+    ollama_ok = is_ollama_available()
+    
+    # Stable Diffusion status
+    sd_ok = False
+    for url in ["http://127.0.0.1:8188/system_stats", "http://127.0.0.1:7860/sdapi/v1/progress"]:
+        try:
+            res = requests.get(url, timeout=1)
+            if res.status_code == 200:
+                sd_ok = True
+                break
+        except Exception:
+            pass
+            
+    # TTS health
+    tts_ok = False
+    try:
+        from .tts_client import TTS_AVAILABLE
+        tts_ok = TTS_AVAILABLE
+    except Exception:
+        pass
+        
+    return {
+        "ollama": ollama_ok,
+        "stable_diffusion": sd_ok,
+        "tts": tts_ok
+    }
+
+
+# =============================================================================
 # Run configuration
 # =============================================================================
 
