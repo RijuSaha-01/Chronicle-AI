@@ -1029,6 +1029,11 @@ class SettingsUpdate(BaseModel):
     voice_profile: Optional[str] = None
     playback_speed: Optional[float] = 1.0
     data_location: Optional[str] = None
+    theme_mode: Optional[str] = None
+    accent_color: Optional[str] = None
+    font_size: Optional[str] = None
+    episode_card_size: Optional[str] = None
+    custom_css: Optional[str] = None
 
 @app.get("/settings")
 async def get_all_settings():
@@ -1054,6 +1059,16 @@ async def get_all_settings():
         settings_dict["playback_speed"] = "1.0"
     if "data_location" not in settings_dict:
         settings_dict["data_location"] = str(Path("data").absolute())
+    if "theme_mode" not in settings_dict:
+        settings_dict["theme_mode"] = "dark"
+    if "accent_color" not in settings_dict:
+        settings_dict["accent_color"] = "#d4af37"
+    if "font_size" not in settings_dict:
+        settings_dict["font_size"] = "medium"
+    if "episode_card_size" not in settings_dict:
+        settings_dict["episode_card_size"] = "comfortable"
+    if "custom_css" not in settings_dict:
+        settings_dict["custom_css"] = ""
         
     return settings_dict
 
@@ -1072,6 +1087,16 @@ async def update_settings(body: SettingsUpdate):
         repo.set_setting("playback_speed", str(body.playback_speed))
     if body.data_location is not None:
         repo.set_setting("data_location", body.data_location)
+    if body.theme_mode is not None:
+        repo.set_setting("theme_mode", body.theme_mode)
+    if body.accent_color is not None:
+        repo.set_setting("accent_color", body.accent_color)
+    if body.font_size is not None:
+        repo.set_setting("font_size", body.font_size)
+    if body.episode_card_size is not None:
+        repo.set_setting("episode_card_size", body.episode_card_size)
+    if body.custom_css is not None:
+        repo.set_setting("custom_css", body.custom_css)
         
     return {"status": "success", "message": "Settings updated"}
 

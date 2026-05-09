@@ -3,6 +3,7 @@
  */
 import API from './services/api.js';
 import GLOBAL_STORE from './services/store.js';
+import ThemeManager from './services/theme.js';
 import { HomeView } from './views/HomeView.js';
 import { CreateView } from './views/CreateView.js';
 import { EpisodeDetailView } from './views/EpisodeDetailView.js';
@@ -16,6 +17,9 @@ const APP = {
     async init() {
         console.log('🎬 Chronicle AI: Netflix Edition Initializing...');
         
+        // Initialize Theme customization instantly
+        ThemeManager.init();
+
         this.root = document.getElementById('app-root');
         this.navLinks = document.querySelectorAll('.nav-link');
         this.playerContainer = document.getElementById('audio-player-root');

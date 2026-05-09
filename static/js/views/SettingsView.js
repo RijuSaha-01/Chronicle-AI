@@ -2,6 +2,7 @@
  * SettingsView - Chronicle AI Settings & Preferences Page
  */
 import API from '../services/api.js';
+import ThemeManager from '../services/theme.js';
 
 export const SettingsView = () => {
     const container = document.createElement('div');
@@ -14,7 +15,12 @@ export const SettingsView = () => {
         visual_style: 'cinematic',
         voice_profile: 'STORYTELLER',
         playback_speed: 1.0,
-        data_location: 'data'
+        data_location: 'data',
+        theme_mode: 'dark',
+        accent_color: '#d4af37',
+        font_size: 'medium',
+        episode_card_size: 'comfortable',
+        custom_css: ''
     };
 
     let storageStats = {
@@ -93,6 +99,7 @@ export const SettingsView = () => {
                         <button class="settings-nav-btn active" data-target="narrative-sec">✍️ Narrative Tone</button>
                         <button class="settings-nav-btn" data-target="visuals-sec">🎬 Visual Presets</button>
                         <button class="settings-nav-btn" data-target="audio-sec">🎙️ Audio & Voice</button>
+                        <button class="settings-nav-btn" data-target="appearance-sec">🎨 Appearance & Themes</button>
                         <button class="settings-nav-btn" data-target="system-sec">🖥️ System Services</button>
                         <button class="settings-nav-btn" data-target="storage-sec">💾 Storage Statistics</button>
                         <button class="settings-nav-btn text-danger" data-target="privacy-sec">🔒 Privacy & Reset</button>
@@ -182,6 +189,69 @@ export const SettingsView = () => {
                                     <span>1.0x (Normal)</span>
                                     <span>2.0x (Fast)</span>
                                 </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- APPEARANCE & THEME SECTION -->
+                    <section id="appearance-sec" class="settings-card">
+                        <div class="settings-card-header">
+                            <h3>Appearance & Themes</h3>
+                            <p>Customize the application aesthetics, color highlights, layout sizing, and typography.</p>
+                        </div>
+                        <div class="settings-card-body">
+                            <!-- Theme Mode Toggle -->
+                            <div class="form-group-netflix">
+                                <label>Theme Mode</label>
+                                <div class="segmented-picker" id="picker-theme-mode">
+                                    <button class="segmented-btn ${localSettings.theme_mode === 'dark' ? 'active' : ''}" data-value="dark">🌙 Dark Mode</button>
+                                    <button class="segmented-btn ${localSettings.theme_mode === 'light' ? 'active' : ''}" data-value="light">☀️ Light Mode</button>
+                                </div>
+                                <small>Switch between a deep cinema black theme or a sleek bright theme.</small>
+                            </div>
+
+                            <!-- Accent Color Picker -->
+                            <div class="form-group-netflix">
+                                <label for="accent_color">Accent Highlight Color</label>
+                                <div style="display: flex; gap: 1rem; align-items: center; margin-top: 0.5rem;">
+                                    <input type="color" id="accent_color" value="${localSettings.accent_color}" style="width: 50px; height: 45px; padding: 0; border: none; border-radius: 4px; cursor: pointer; background: none;">
+                                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                                        <button class="btn-netflix secondary preset-color-btn" data-color="#d4af37" style="padding: 6px 12px; font-size: 0.8rem; background: #222; border: 1px solid #d4af37; color: #d4af37;">Hollywood Gold</button>
+                                        <button class="btn-netflix secondary preset-color-btn" data-color="#E50914" style="padding: 6px 12px; font-size: 0.8rem; background: #222; border: 1px solid #E50914; color: #E50914;">Netflix Red</button>
+                                        <button class="btn-netflix secondary preset-color-btn" data-color="#00F0FF" style="padding: 6px 12px; font-size: 0.8rem; background: #222; border: 1px solid #00F0FF; color: #00F0FF;">Neon Cyberpunk</button>
+                                        <button class="btn-netflix secondary preset-color-btn" data-color="#FF007A" style="padding: 6px 12px; font-size: 0.8rem; background: #222; border: 1px solid #FF007A; color: #FF007A;">Vibrant Pink</button>
+                                        <button class="btn-netflix secondary preset-color-btn" data-color="#2ECC71" style="padding: 6px 12px; font-size: 0.8rem; background: #222; border: 1px solid #2ECC71; color: #2ECC71;">Emerald Green</button>
+                                    </div>
+                                </div>
+                                <small>Choose a brilliant color for active states, highlights, slider fills, and buttons.</small>
+                            </div>
+
+                            <!-- Font Size Selection -->
+                            <div class="form-group-netflix">
+                                <label>Interface Font Size</label>
+                                <div class="segmented-picker" id="picker-font-size">
+                                    <button class="segmented-btn ${localSettings.font_size === 'small' ? 'active' : ''}" data-value="small">A- Small</button>
+                                    <button class="segmented-btn ${localSettings.font_size === 'medium' ? 'active' : ''}" data-value="medium">A Medium</button>
+                                    <button class="segmented-btn ${localSettings.font_size === 'large' ? 'active' : ''}" data-value="large">A+ Large</button>
+                                </div>
+                                <small>Adjust typography sizing globally for optimal readability.</small>
+                            </div>
+
+                            <!-- Episode Card Size Selection -->
+                            <div class="form-group-netflix">
+                                <label>Episode Card Layout Sizing</label>
+                                <div class="segmented-picker" id="picker-card-size">
+                                    <button class="segmented-btn ${localSettings.episode_card_size === 'compact' ? 'active' : ''}" data-value="compact">Compact Grid</button>
+                                    <button class="segmented-btn ${localSettings.episode_card_size === 'comfortable' ? 'active' : ''}" data-value="comfortable">Comfortable Row</button>
+                                </div>
+                                <small>Switch between a compact view or the default spacious Netflix row layout.</small>
+                            </div>
+
+                            <!-- Custom CSS Override -->
+                            <div class="form-group-netflix">
+                                <label for="custom_css">Advanced Custom CSS Overrides</label>
+                                <textarea id="custom_css" class="custom-css-textarea" placeholder="/* Enter custom CSS rules here. E.g. .navbar { background: red !important; } */">${localSettings.custom_css}</textarea>
+                                <small>Write any valid CSS style rules to override default themes. Applied dynamically instantly.</small>
                             </div>
                         </div>
                     </section>
@@ -342,6 +412,68 @@ export const SettingsView = () => {
             };
         }
 
+        // Interactive Segmented Theme Selection
+        const themePickers = container.querySelectorAll('#picker-theme-mode .segmented-btn');
+        themePickers.forEach(btn => {
+            btn.onclick = () => {
+                themePickers.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                localSettings.theme_mode = btn.dataset.value;
+                ThemeManager.apply(localSettings);
+            };
+        });
+
+        // Accent Color Change
+        const colorInput = container.querySelector('#accent_color');
+        if (colorInput) {
+            colorInput.oninput = (e) => {
+                localSettings.accent_color = e.target.value;
+                ThemeManager.apply(localSettings);
+            };
+        }
+
+        // Preset Accent Color Buttons
+        const presetColorBtns = container.querySelectorAll('.preset-color-btn');
+        presetColorBtns.forEach(btn => {
+            btn.onclick = () => {
+                const color = btn.dataset.color;
+                if (colorInput) colorInput.value = color;
+                localSettings.accent_color = color;
+                ThemeManager.apply(localSettings);
+            };
+        });
+
+        // Font Sizing Selection
+        const fontPickers = container.querySelectorAll('#picker-font-size .segmented-btn');
+        fontPickers.forEach(btn => {
+            btn.onclick = () => {
+                fontPickers.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                localSettings.font_size = btn.dataset.value;
+                ThemeManager.apply(localSettings);
+            };
+        });
+
+        // Card Sizing Selection
+        const cardPickers = container.querySelectorAll('#picker-card-size .segmented-btn');
+        cardPickers.forEach(btn => {
+            btn.onclick = () => {
+                cardPickers.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                localSettings.episode_card_size = btn.dataset.value;
+                ThemeManager.apply(localSettings);
+            };
+        });
+
+        // Custom CSS Overrides Selection
+        const customCssTextarea = container.querySelector('#custom_css');
+        if (customCssTextarea) {
+            customCssTextarea.oninput = (e) => {
+                localSettings.custom_css = e.target.value;
+                ThemeManager.apply(localSettings);
+            };
+        }
+
         // Save All Button clicked
         const saveFloatingBtn = container.querySelector('.btn-save-all-floating');
         if (saveFloatingBtn) {
@@ -358,7 +490,7 @@ export const SettingsView = () => {
                 if (voiceProfileSelect) localSettings.voice_profile = voiceProfileSelect.value;
 
                 try {
-                    await API.updateSettings(localSettings);
+                    await ThemeManager.update(localSettings);
                     showToast('Settings & Preferences saved successfully!');
                 } catch (e) {
                     showToast(e.message || 'Failed to save settings', 'error');
@@ -464,7 +596,12 @@ export const SettingsView = () => {
                     visual_style: setRes.visual_style || 'cinematic',
                     voice_profile: setRes.voice_profile || 'STORYTELLER',
                     playback_speed: parseFloat(setRes.playback_speed || 1.0),
-                    data_location: setRes.data_location || 'data'
+                    data_location: setRes.data_location || 'data',
+                    theme_mode: setRes.theme_mode || 'dark',
+                    accent_color: setRes.accent_color || '#d4af37',
+                    font_size: setRes.font_size || 'medium',
+                    episode_card_size: setRes.episode_card_size || 'comfortable',
+                    custom_css: setRes.custom_css !== undefined ? setRes.custom_css : ''
                 };
             }
         } catch (e) {
