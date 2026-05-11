@@ -124,9 +124,9 @@ class AudioPlayerManager {
                 
                 <div class="player-controls">
                     <div class="control-buttons">
-                        <button class="player-btn" id="player-rewind">↺</button>
-                        <button class="player-btn play-pause" id="player-play-pause">▶</button>
-                        <button class="player-btn" id="player-forward">↻</button>
+                        <button class="player-btn" id="player-rewind" title="Rewind (Left Arrow)">↺</button>
+                        <button class="player-btn play-pause" id="player-play-pause" title="Play/Pause (Space)">▶</button>
+                        <button class="player-btn" id="player-forward" title="Forward (Right Arrow)">↻</button>
                     </div>
                     
                     <div class="player-progress-container">
@@ -141,7 +141,7 @@ class AudioPlayerManager {
 
                 <div class="player-actions">
                     <div class="chapter-dropdown">
-                        <button class="player-btn" id="chapter-btn">≣ Chapters</button>
+                        <button class="player-btn" id="chapter-btn" title="Chapters (1-5)">≣ Chapters</button>
                         <div class="chapter-menu" id="chapter-menu">
                             ${chapters.map((ch, i) => `
                                 <div class="chapter-item" data-time="${ch.time}">
@@ -153,13 +153,13 @@ class AudioPlayerManager {
                     </div>
 
                     <div class="volume-control">
-                        <button class="player-btn" id="volume-btn">🔊</button>
+                        <button class="player-btn" id="volume-btn" title="Mute (m)">🔊</button>
                         <div class="volume-slider-container">
                             <input type="range" id="volume-slider" min="0" max="1" step="0.01" value="${this.audio.volume}">
                         </div>
                     </div>
                     
-                    <button id="close-player" class="player-btn">✕</button>
+                    <button id="close-player" class="player-btn" title="Close (Esc)">✕</button>
                 </div>
             </div>
         `;
@@ -257,6 +257,25 @@ class AudioPlayerManager {
         }
     }
 
+    toggleMute() {
+        this.audio.muted = !this.audio.muted;
+        const btn = this.container?.querySelector('#volume-btn');
+        if (btn) btn.innerHTML = this.audio.muted ? '🔇' : '🔊';
+    }
+
+    seekSeconds(sec) {
+        this.audio.currentTime = Math.max(0, Math.min(this.audio.duration || 0, this.audio.currentTime + sec));
+    }
+
+    jumpToChapter(index) {
+        const chapters = this.currentEpisode?.chapters || [];
+        if (chapters[index]) {
+            this.audio.currentTime = chapters[index].time;
+        } else if (index === 0) {
+            this.audio.currentTime = 0; // fallback for 1st key if no chapters explicitly provided beyond defaults
+        }
+    }
+
     updatePlayPauseIcon(isPlaying) {
         const btn = this.container?.querySelector('#player-play-pause');
         if (btn) btn.innerHTML = isPlaying ? '⏸' : '▶';
@@ -296,3 +315,6 @@ const PLAYER_INSTANCE = new AudioPlayerManager();
 export const AudioPlayer = (episode) => {
     return PLAYER_INSTANCE.render(episode);
 };
+
+// Export player instance for external controls like Keyboard Shortcuts
+export const getPlayerInstance = () => PLAYER_INSTANCE;

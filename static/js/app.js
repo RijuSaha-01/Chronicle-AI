@@ -12,6 +12,7 @@ import { SearchView } from './views/SearchView.js';
 import { ChatView } from './views/ChatView.js';
 import { SettingsView } from './views/SettingsView.js';
 import { AudioPlayer } from './components/AudioPlayer.js';
+import { KeyboardManager } from './services/keyboard.js';
 
 const APP = {
     async init() {
@@ -19,6 +20,9 @@ const APP = {
         
         // Initialize Theme customization instantly
         ThemeManager.init();
+        
+        // Initialize Keyboard Shortcuts
+        KeyboardManager.init();
 
         this.root = document.getElementById('app-root');
         this.navLinks = document.querySelectorAll('.nav-link');
@@ -72,44 +76,7 @@ const APP = {
         // Initial render
         this.render(GLOBAL_STORE.getState());
         
-        // Keyboard shortcuts & Navigation
-        document.addEventListener('keydown', (e) => {
-            // '/' to focus search
-            if (e.key === '/' && document.activeElement !== this.searchBar) {
-                e.preventDefault();
-                this.searchBar.focus();
-            }
-
-            if (e.key === 'Escape') {
-                const modal = document.getElementById('modal-episode');
-                if (modal) modal.classList.remove('active');
-                this.searchDropdown.classList.remove('active');
-                this.searchBar.blur();
-            }
-
-            // Arrow Key Navigation for Netflix-style browsing
-            if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
-                const focused = document.activeElement;
-                if (focused && (focused.classList.contains('netflix-episode-card') || focused.classList.contains('result-card-list'))) {
-                    e.preventDefault();
-                    const cards = Array.from(document.querySelectorAll('.netflix-episode-card, .result-card-list'));
-                    const index = cards.indexOf(focused);
-                    
-                    if (e.key === 'ArrowRight' && index < cards.length - 1) {
-                        cards[index + 1].focus();
-                        cards[index + 1].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-                    } else if (e.key === 'ArrowLeft' && index > 0) {
-                        cards[index - 1].focus();
-                        cards[index - 1].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-                    } else if (e.key === 'ArrowDown') {
-                        // For list view or next row in grid
-                        if (index < cards.length - 1) cards[index + 1].focus();
-                    } else if (e.key === 'ArrowUp') {
-                        if (index > 0) cards[index - 1].focus();
-                    }
-                }
-            }
-        });
+        // Handled by KeyboardManager now
     },
 
     async performLiveSearch(query) {

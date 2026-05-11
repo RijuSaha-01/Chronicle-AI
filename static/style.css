@@ -3759,4 +3759,78 @@ body.theme-light .custom-css-textarea {
 }
 
 
+/* =============================================================================
+   KEYBOARD SHORTCUT MODAL & TIPS
+   ============================================================================= */
+.keyboard-modal .modal-content {
+    max-width: 600px;
+    width: 90%;
+}
+
+.shortcut-dialog .modal-title {
+    font-size: 1.8rem;
+    margin-bottom: 1.5rem;
+    color: var(--gold-primary);
+    border-bottom: 1px solid var(--border-subtle);
+    padding-bottom: 0.5rem;
+    font-family: 'Space Grotesk', sans-serif;
+}
+
+.shortcut-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+}
+
+@media (max-width: 600px) {
+    .shortcut-grid { grid-template-columns: 1fr; }
+}
+
+.shortcut-section h3 {
+    font-size: 1.1rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--gold-bright);
+    margin-bottom: 1rem;
+    font-family: 'Space Grotesk', sans-serif;
+}
+
+.shortcut-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+}
+
+kbd {
+    background: #2a2a2a;
+    color: var(--gold-bright);
+    border: 1px solid #444;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-family: 'Space Grotesk', monospace;
+    font-size: 0.85rem;
+    min-width: 24px;
+    text-align: center;
+    display: inline-block;
+    box-shadow: 0 2px 0 #000;
+}
+
+/* Tooltip Enhancement to show shortcut hints */
+.tooltip-hint {
+    font-size: 0.65rem;
+    background: var(--gold-primary);
+    color: black;
+    padding: 1px 4px;
+    border-radius: 3px;
+    margin-left: 6px;
+    font-weight: bold;
+    opacity: 0.8;
+}
+
+.player-btn {
+    position: relative;
+}
 
