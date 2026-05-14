@@ -19,9 +19,14 @@
 
 <body>
     <!-- TOP NAVIGATION -->
-    <nav class="navbar">
-        <div class="nav-container">
-            <!-- Logo & Brand -->
+            <!-- Mobile Menu Button -->
+            <button class="mobile-menu-btn" id="mobile-menu-toggle" aria-label="Open Menu">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+
+            <!-- Brand -->
             <div class="brand">
                 <div class="brand-text">
                     <span class="brand-name">Chronicle AI</span>
@@ -39,8 +44,8 @@
                 <div id="search-live-results" class="search-dropdown"></div>
             </div>
 
-            <!-- Nav Links -->
-            <div class="nav-links">
+            <!-- Nav Links (Desktop) -->
+            <div class="nav-links desktop-only">
                 <button class="nav-link active" data-view="episodes" title="Home (h)">
                     <span class="nav-link-icon">📺</span>
                     <span>Browse</span>
@@ -67,6 +72,58 @@
                 </div>
             </div>
         </div>
+    </nav>
+
+    <!-- MOBILE SIDE DRAWER -->
+    <div id="mobile-drawer" class="mobile-drawer">
+        <div class="drawer-header">
+            <span class="brand-name">Chronicle AI</span>
+            <button id="drawer-close" class="drawer-close">✕</button>
+        </div>
+        <div class="drawer-content">
+            <div class="drawer-nav">
+                <button class="drawer-link active" data-view="episodes">
+                    <span class="nav-link-icon">📺</span>
+                    <span>Browse Home</span>
+                </button>
+                <button class="drawer-link" data-view="create">
+                    <span class="nav-link-icon">✍️</span>
+                    <span>Create New Episode</span>
+                </button>
+                <button class="drawer-link" data-view="chat">
+                    <span class="nav-link-icon">💬</span>
+                    <span>AI Memory Chat</span>
+                </button>
+                <button class="drawer-link" data-view="settings">
+                    <span class="nav-link-icon">⚙️</span>
+                    <span>App Settings</span>
+                </button>
+            </div>
+            <div class="drawer-footer">
+                <p>Premium Cinematic Experience</p>
+            </div>
+        </div>
+    </div>
+    <div id="drawer-overlay" class="drawer-overlay"></div>
+
+    <!-- BOTTOM NAVIGATION (Mobile Only) -->
+    <nav class="bottom-nav mobile-only">
+        <button class="bottom-nav-link active" data-view="episodes">
+            <span class="nav-link-icon">📺</span>
+            <span>Home</span>
+        </button>
+        <button class="bottom-nav-link" data-view="create">
+            <span class="nav-link-icon">✍️</span>
+            <span>Create</span>
+        </button>
+        <button class="bottom-nav-link" data-view="chat">
+            <span class="nav-link-icon">💬</span>
+            <span>Chat</span>
+        </button>
+        <button class="bottom-nav-link" data-view="settings">
+            <span class="nav-link-icon">⚙️</span>
+            <span>Settings</span>
+        </button>
     </nav>
 
     <!-- MAIN CONTENT AREA -->

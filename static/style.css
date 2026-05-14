@@ -3833,4 +3833,325 @@ kbd {
 .player-btn {
     position: relative;
 }
+
+/* =============================================================================
+   MOBILE POLISH - Day 83
+   ============================================================================= */
+
+/* Visibility Utilities */
+.desktop-only { display: flex; }
+.mobile-only { display: none; }
+
+@media (max-width: 768px) {
+    .desktop-only { display: none !important; }
+    .mobile-only { display: flex !important; }
+    
+    :root {
+        --navbar-height: 60px;
+    }
+}
+
+/* Hamburger Menu Button */
+.mobile-menu-btn {
+    display: none;
+    flex-direction: column;
+    justify-content: space-between;
+    width: 30px;
+    height: 20px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    z-index: 1001;
+}
+
+.mobile-menu-btn span {
+    width: 100%;
+    height: 2px;
+    background-color: var(--gold-primary);
+    border-radius: 2px;
+    transition: all 0.3s ease;
+}
+
+@media (max-width: 768px) {
+    .mobile-menu-btn { display: flex; }
+    .nav-container { padding: 0 1rem; gap: 1rem; }
+    .nav-search { flex: 1; max-width: none; }
+    .nav-status { display: none; }
+}
+
+/* Mobile Side Drawer */
+.mobile-drawer {
+    position: fixed;
+    top: 0;
+    left: -300px;
+    width: 300px;
+    height: 100%;
+    background: var(--bg-secondary);
+    z-index: 2000;
+    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    flex-direction: column;
+    box-shadow: 10px 0 30px rgba(0,0,0,0.5);
+    border-right: 1px solid var(--border-subtle);
+}
+
+.mobile-drawer.open {
+    transform: translateX(300px);
+}
+
+.drawer-header {
+    padding: 2rem 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.drawer-close {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 1.5rem;
+    cursor: pointer;
+}
+
+.drawer-content {
+    flex: 1;
+    padding: 2rem 0;
+    overflow-y: auto;
+}
+
+.drawer-nav {
+    display: flex;
+    flex-direction: column;
+}
+
+.drawer-link {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.25rem 2rem;
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 1.1rem;
+    font-weight: 500;
+    border: none;
+    background: none;
+    width: 100%;
+    text-align: left;
+    transition: all 0.2s;
+}
+
+.drawer-link.active {
+    color: var(--gold-primary);
+    background: rgba(212, 175, 55, 0.05);
+    border-left: 4px solid var(--gold-primary);
+}
+
+.drawer-footer {
+    padding: 2rem;
+    border-top: 1px solid var(--border-subtle);
+    color: var(--text-tertiary);
+    font-size: 0.8rem;
+    text-align: center;
+}
+
+.drawer-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.7);
+    z-index: 1999;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s;
+    backdrop-filter: blur(4px);
+}
+
+.drawer-overlay.open {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Bottom Navigation */
+.bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 70px;
+    background: rgba(10, 10, 10, 0.95);
+    backdrop-filter: blur(20px);
+    border-top: 1px solid var(--border-subtle);
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    z-index: 1000;
+    padding-bottom: env(safe-area-inset-bottom);
+}
+
+.bottom-nav-link {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    background: none;
+    border: none;
+    color: var(--text-tertiary);
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex: 1;
+}
+
+.bottom-nav-link .nav-link-icon {
+    font-size: 1.4rem;
+}
+
+.bottom-nav-link.active {
+    color: var(--gold-primary);
+}
+
+/* Full Width Episode Cards on Mobile */
+@media (max-width: 600px) {
+    .netflix-row {
+        margin: 0;
+        padding: 1.5rem 0;
+    }
+    
+    .row-title {
+        padding: 0 1rem;
+        font-size: 1.3rem;
+    }
+    
+    .carousel-track {
+        flex-direction: column;
+        gap: 1.5rem;
+        padding: 0 1rem;
+    }
+    
+    .netflix-episode-card {
+        width: 100%;
+        min-width: 0;
+        height: auto;
+        aspect-ratio: 16/9;
+    }
+    
+    .carousel-viewport {
+        overflow-x: hidden;
+    }
+    
+    .carousel-nav {
+        display: none !important;
+    }
+
+    .billboard {
+        height: 50vh;
+        padding: 0 1rem;
+        margin-bottom: 0;
+    }
+    
+    .billboard-title {
+        font-size: 2.5rem;
+    }
+    
+    .billboard-synopsis {
+        font-size: 1rem;
+        -webkit-line-clamp: 3;
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+}
+
+/* Touch Friendly Controls */
+.nav-link, .btn-netflix, .player-btn, .bottom-nav-link, .drawer-link {
+    min-height: 44px;
+    min-width: 44px;
+}
+
+/* Compact Responsive Audio Player */
+@media (max-width: 768px) {
+    .netflix-player-bar {
+        height: 70px;
+        padding: 0 1rem;
+        bottom: 70px; /* Above bottom nav */
+    }
+    
+    .player-content {
+        grid-template-columns: 1fr 60px;
+        gap: 10px;
+    }
+    
+    .player-info {
+        gap: 10px;
+    }
+    
+    .player-thumbnail {
+        width: 44px;
+        height: 44px;
+    }
+    
+    .player-episode-title {
+        font-size: 0.9rem;
+    }
+    
+    .player-controls {
+        flex-direction: row;
+        gap: 10px;
+    }
+    
+    .control-buttons {
+        gap: 0;
+    }
+    
+    .player-btn:not(.play-pause) {
+        display: none;
+    }
+    
+    .player-progress-container, .player-actions, .player-series {
+        display: none;
+    }
+}
+
+/* Pull to Refresh Styles */
+.pull-to-refresh {
+    position: relative;
+    width: 100%;
+    height: 0;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-primary);
+    transition: height 0.3s;
+}
+
+.pull-to-refresh.active {
+    height: 60px;
+}
+
+.ptr-indicator {
+    width: 30px;
+    height: 30px;
+    border: 3px solid var(--border-subtle);
+    border-top-color: var(--gold-primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Adjust app-main for bottom nav */
+@media (max-width: 768px) {
+    .app-main {
+        padding-bottom: 150px; /* Space for player + bottom nav */
+    }
+}
 

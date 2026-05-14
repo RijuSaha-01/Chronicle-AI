@@ -36,13 +36,31 @@ const APP = {
         // Listen to state changes
         GLOBAL_STORE.subscribe((state) => this.render(state));
         
-        // Setup Nav
-        this.navLinks.forEach(link => {
+        // Setup Nav (Desktop, Drawer, Bottom)
+        const allNavLinks = document.querySelectorAll('.nav-link, .drawer-link, .bottom-nav-link');
+        allNavLinks.forEach(link => {
             link.onclick = () => {
                 const view = link.dataset.view;
                 GLOBAL_STORE.setState({ currentView: view });
+                this.closeDrawer();
             };
         });
+
+        // Mobile Menu Toggles
+        this.menuToggle = document.getElementById('mobile-menu-toggle');
+        this.drawer = document.getElementById('mobile-drawer');
+        this.drawerClose = document.getElementById('drawer-close');
+        this.drawerOverlay = document.getElementById('drawer-overlay');
+
+        if (this.menuToggle) this.menuToggle.onclick = () => this.toggleDrawer();
+        if (this.drawerClose) this.drawerClose.onclick = () => this.closeDrawer();
+        if (this.drawerOverlay) this.drawerOverlay.onclick = () => this.closeDrawer();
+
+        // Swipe Gestures for Episode Navigation
+        this.setupSwipeGestures();
+
+        // Pull to Refresh
+        this.setupPullToRefresh();
 
         // Search Bar Logic
         let debounceTimer;
@@ -182,8 +200,9 @@ const APP = {
     },
 
     render(state) {
-        // Update Nav Active State
-        this.navLinks.forEach(link => {
+        // Update Nav Active State (Desktop, Drawer, Bottom)
+        const allNavLinks = document.querySelectorAll('.nav-link, .drawer-link, .bottom-nav-link');
+        allNavLinks.forEach(link => {
             link.classList.toggle('active', link.dataset.view === state.currentView);
         });
 
@@ -285,6 +304,100 @@ const APP = {
         toast.textContent = message;
         container.appendChild(toast);
         setTimeout(() => toast.remove(), 3000);
+    },
+
+    // MOBILE HELPERS
+    toggleDrawer() {
+        this.drawer.classList.add('open');
+        this.drawerOverlay.classList.add('open');
+    },
+
+    closeDrawer() {
+        if (this.drawer) this.drawer.classList.remove('open');
+        if (this.drawerOverlay) this.drawerOverlay.classList.remove('open');
+    },
+
+    setupSwipeGestures() {
+        let touchstartX = 0;
+        let touchendX = 0;
+        
+        document.addEventListener('touchstart', e => {
+            touchstartX = e.changedTouches[0].screenX;
+        }, false);
+
+        document.addEventListener('touchend', e => {
+            touchendX = e.changedTouches[0].screenX;
+            this.handleSwipe(touchstartX, touchendX);
+        }, false);
+    },
+
+    handleSwipe(start, end) {
+        const threshold = 100;
+        const state = GLOBAL_STORE.getState();
+        
+        // Navigation logic
+        if (state.currentView === 'episodes') {
+            if (end - start > threshold) {
+                // Swiped Right -> Open drawer
+                this.toggleDrawer();
+            }
+        } else if (state.currentView === 'episodeDetail') {
+            const episodes = state.episodes || [];
+            const currentIndex = episodes.findIndex(ep => ep.id === state.selectedEpisodeId);
+            
+            if (start - end > threshold) {
+                // Swiped Left -> Next Episode
+                if (currentIndex < episodes.length - 1) {
+                    this.handleEpisodeClick(episodes[currentIndex + 1].id);
+                }
+            } else if (end - start > threshold) {
+                // Swiped Right -> Previous Episode or Back
+                if (currentIndex > 0) {
+                    this.handleEpisodeClick(episodes[currentIndex - 1].id);
+                } else {
+                    GLOBAL_STORE.setState({ currentView: 'episodes' });
+                }
+            }
+        }
+    },
+
+    setupPullToRefresh() {
+        let touchstart = 0;
+        const main = document.querySelector('.app-main');
+        
+        // Add PTR element if not exists
+        if (!document.querySelector('.pull-to-refresh')) {
+            const ptr = document.createElement('div');
+            ptr.className = 'pull-to-refresh';
+            ptr.innerHTML = '<div class="ptr-indicator"></div>';
+            main.prepend(ptr);
+        }
+
+        const ptr = document.querySelector('.pull-to-refresh');
+
+        window.addEventListener('touchstart', (e) => {
+            if (window.scrollY === 0) {
+                touchstart = e.touches[0].pageY;
+            }
+        });
+
+        window.addEventListener('touchmove', (e) => {
+            const touch = e.touches[0].pageY;
+            if (window.scrollY === 0 && touch > touchstart) {
+                const diff = touch - touchstart;
+                if (diff > 50) {
+                    ptr.classList.add('active');
+                }
+            }
+        });
+
+        window.addEventListener('touchend', async () => {
+            if (ptr.classList.contains('active')) {
+                await this.refreshData();
+                ptr.classList.remove('active');
+                this.showToast('Data refreshed', 'success');
+            }
+        });
     }
 };
 
