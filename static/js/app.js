@@ -30,6 +30,14 @@ const APP = {
         this.searchBar = document.getElementById('header-search');
         this.searchDropdown = document.getElementById('search-live-results');
         
+        // Setup Global Progress Bar
+        this.progress = document.createElement('div');
+        this.progress.className = 'global-progress-bar';
+        this.progress.innerHTML = '<div class="global-progress-fill"></div>';
+        document.body.appendChild(this.progress);
+        this.progressFill = this.progress.querySelector('.global-progress-fill');
+        
+        
         // Initial state load
         await this.refreshData();
         
@@ -147,6 +155,7 @@ const APP = {
         this.searchDropdown.classList.remove('active');
         this.searchBar.blur();
         
+        this.setProgress(30);
         GLOBAL_STORE.setState({ 
             isSearching: true, 
             searchQuery: query,
@@ -155,6 +164,7 @@ const APP = {
 
         try {
             const results = await API.search(query, GLOBAL_STORE.getState().searchFilters);
+            this.setProgress(80);
             
             // Update recent searches
             let recent = GLOBAL_STORE.getState().recentSearches;
@@ -169,16 +179,21 @@ const APP = {
         } catch (error) {
             this.showToast('Search failed', 'error');
             GLOBAL_STORE.setState({ isSearching: false });
+        } finally {
+            this.setProgress(100);
+            setTimeout(() => this.setProgress(null), 500);
         }
     },
 
     async refreshData() {
         GLOBAL_STORE.setState({ isLoading: true });
+        this.setProgress(20);
         try {
             const [episodesData, seasonsData] = await Promise.all([
                 API.getEpisodes(100),
                 API.getSeasons()
             ]);
+            this.setProgress(80);
             GLOBAL_STORE.setState({ 
                 episodes: episodesData.entries || [], 
                 seasons: seasonsData.seasons || [],
@@ -187,6 +202,9 @@ const APP = {
         } catch (error) {
             this.showToast(error.message, 'error');
             GLOBAL_STORE.setState({ isLoading: false });
+        } finally {
+            this.setProgress(100);
+            setTimeout(() => this.setProgress(null), 500);
         }
     },
 
@@ -206,8 +224,12 @@ const APP = {
             link.classList.toggle('active', link.dataset.view === state.currentView);
         });
 
-        // Clear root
+        // Clear and add fade-in
         this.root.innerHTML = '';
+        this.root.classList.remove('fade-in');
+        // Trigger reflow
+        void this.root.offsetWidth;
+        this.root.classList.add('fade-in');
 
         // View Routing
         if (state.currentView === 'episodes') {
@@ -246,19 +268,24 @@ const APP = {
 
     async handleCreate(data) {
         GLOBAL_STORE.setState({ isLoading: true });
+        this.setProgress(10);
         try {
+            this.setProgress(30);
             if (data.mode === 'quick') {
                 await API.createQuickEntry(data);
             } else {
                 await API.createGuidedEntry(data);
             }
+            this.setProgress(80);
             this.showToast('Episode Created Successfully!', 'success');
             await this.refreshData();
+            this.setProgress(100);
             GLOBAL_STORE.setState({ currentView: 'episodes' });
         } catch (error) {
             this.showToast(error.message, 'error');
         } finally {
             GLOBAL_STORE.setState({ isLoading: false });
+            setTimeout(() => this.setProgress(null), 500);
         }
     },
 
@@ -303,7 +330,25 @@ const APP = {
         toast.className = `toast ${type}`;
         toast.textContent = message;
         container.appendChild(toast);
-        setTimeout(() => toast.remove(), 3000);
+        
+        // Trigger animation
+        setTimeout(() => toast.classList.add('show'), 10);
+        
+        // Remove after 3s
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    },
+
+    setProgress(percent) {
+        if (percent === null || percent === undefined) {
+            this.progress.classList.remove('active');
+            this.progressFill.style.width = '0%';
+        } else {
+            this.progress.classList.add('active');
+            this.progressFill.style.width = `${percent}%`;
+        }
     },
 
     // MOBILE HELPERS
