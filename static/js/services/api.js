@@ -2,8 +2,22 @@
  * Chronicle AI - API Service
  */
 
+const CACHE = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 const API = {
     async call(endpoint, options = {}) {
+        const cacheKey = `${options.method || 'GET'}:${endpoint}:${options.body || ''}`;
+        
+        // Only cache GET requests
+        if (!options.method || options.method === 'GET') {
+            const cached = CACHE.get(cacheKey);
+            if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+                console.log(`[API] Cache Hit: ${endpoint}`);
+                return cached.data;
+            }
+        }
+
         try {
             const response = await fetch(endpoint, {
                 headers: {
@@ -19,7 +33,21 @@ const API = {
             }
 
             if (response.status === 204) return null;
-            return await response.json();
+            const data = await response.json();
+
+            // Cache the result
+            if (!options.method || options.method === 'GET') {
+                CACHE.set(cacheKey, {
+                    data,
+                    timestamp: Date.now()
+                });
+            } else {
+                // Invalidate cache on mutations
+                console.log(`[API] Invaliding cache due to mutation: ${options.method} ${endpoint}`);
+                CACHE.clear();
+            }
+
+            return data;
         } catch (error) {
             console.error('API Error:', error);
             throw error;

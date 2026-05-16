@@ -13,6 +13,7 @@ import { ChatView } from './views/ChatView.js';
 import { SettingsView } from './views/SettingsView.js';
 import { AudioPlayer } from './components/AudioPlayer.js';
 import { KeyboardManager } from './services/keyboard.js';
+import { debounce } from './utils/performance.js';
 
 const APP = {
     async init() {
@@ -69,18 +70,15 @@ const APP = {
 
         // Pull to Refresh
         this.setupPullToRefresh();
-
         // Search Bar Logic
-        let debounceTimer;
-        this.searchBar.oninput = (e) => {
+        this.searchBar.oninput = debounce((e) => {
             const query = e.target.value;
-            clearTimeout(debounceTimer);
             if (query.length > 2) {
-                debounceTimer = setTimeout(() => this.performLiveSearch(query), 300);
+                this.performLiveSearch(query);
             } else {
                 this.searchDropdown.classList.remove('active');
             }
-        };
+        }, 300);
 
         this.searchBar.onkeydown = (e) => {
             if (e.key === 'Enter') {

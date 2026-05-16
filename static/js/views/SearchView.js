@@ -4,6 +4,7 @@
 import GLOBAL_STORE from '../services/store.js';
 import API from '../services/api.js';
 import { EpisodeCard } from '../components/EpisodeCard.js';
+import { VirtualList } from '../components/VirtualList.js';
 
 export const SearchView = (onEpisodeClick) => {
     const state = GLOBAL_STORE.getState();
@@ -79,6 +80,7 @@ export const SearchView = (onEpisodeClick) => {
         </div>
     `;
 
+
     const resultsList = document.createElement('div');
     resultsList.className = state.searchViewMode === 'grid' ? 'results-grid' : 'results-list';
 
@@ -98,9 +100,8 @@ export const SearchView = (onEpisodeClick) => {
             </div>
         `;
     } else {
-        state.searchResults.forEach(res => {
-            if (state.searchViewMode === 'grid') {
-                // Find original episode in state if possible to get full data
+        if (state.searchViewMode === 'grid') {
+            state.searchResults.forEach(res => {
                 const ep = state.episodes.find(e => e.id == res.episode_id) || {
                     id: res.episode_id,
                     title: res.title,
@@ -110,7 +111,9 @@ export const SearchView = (onEpisodeClick) => {
                 };
                 const card = EpisodeCard(ep, () => onEpisodeClick(ep.id));
                 resultsList.appendChild(card);
-            } else {
+            });
+        } else {
+            const renderItem = (res) => {
                 const card = document.createElement('div');
                 card.className = 'result-card-list';
                 card.onclick = () => onEpisodeClick(res.episode_id);
@@ -118,16 +121,26 @@ export const SearchView = (onEpisodeClick) => {
                 const cover = res.metadata?.cover_art_path || '/static/img/placeholder.jpg';
                 
                 card.innerHTML = `
-                    <img src="${cover}" class="result-list-cover" alt="Cover">
+                    <img data-src="${cover}" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" class="result-list-cover lazy" alt="Cover">
                     <div class="result-list-content">
                         <div class="result-list-meta">${new Date(res.date).toLocaleDateString()} • ${res.mood || 'Reflective'}</div>
                         <h3 class="result-list-title">${res.title}</h3>
                         <div class="result-list-snippet">${res.highlighted_text}</div>
                     </div>
                 `;
-                resultsList.appendChild(card);
-            }
-        });
+                // Lazy load the list image
+                const img = card.querySelector('.lazy');
+                import('../utils/performance.js').then(({ LazyLoader }) => LazyLoader.observe(img));
+                
+                return card;
+            };
+
+            const virtualList = VirtualList(state.searchResults, renderItem, {
+                itemHeight: 120,
+                containerHeight: window.innerHeight - 250
+            });
+            resultsList.appendChild(virtualList);
+        }
     }
 
     main.appendChild(resultsHeader);

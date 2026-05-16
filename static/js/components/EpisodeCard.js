@@ -1,6 +1,4 @@
-/**
- * EpisodeCard Component - Netflix Edition
- */
+import { LazyLoader } from '../utils/performance.js';
 
 export const EpisodeCard = (episode, onClick) => {
     const title = episode.title || 'Untitled Episode';
@@ -41,7 +39,7 @@ export const EpisodeCard = (episode, onClick) => {
 
     card.innerHTML = `
         <div class="episode-card-thumbnail">
-            <img src="${coverArt}" alt="${title}" loading="lazy" class="episode-img">
+            <img data-src="${coverArt}" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" alt="${title}" class="episode-img lazy">
             <div class="episode-mood-accent" style="background: ${moodColor}"></div>
             <div class="episode-duration">${duration}</div>
             ${progress > 0 ? `
@@ -65,6 +63,10 @@ export const EpisodeCard = (episode, onClick) => {
             </div>
         </div>
     `;
+
+    // Observe image for lazy loading
+    const img = card.querySelector('.episode-img');
+    LazyLoader.observe(img);
 
     card.addEventListener('click', (e) => {
         onClick(episode.id);
