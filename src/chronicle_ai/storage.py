@@ -27,7 +27,8 @@ class ImageStorageManager:
     Manages the filesystem storage of images with metadata and variants.
     """
 
-    def __init__(self, base_data_dir: str = "data"):
+    def __init__(self, base_data_dir: Optional[str] = None):
+        base_data_dir = base_data_dir or os.getenv("CHRONICLE_DATA_DIR", "data")
         self.base_dir = Path(base_data_dir) / "images"
         self.base_dir.mkdir(parents=True, exist_ok=True)
         self.repo = get_repository()

@@ -31,8 +31,10 @@ class SeasonPosterGenerator:
 
     def __init__(self, image_gen: Optional[ImageGenerator] = None, base_data_dir: str = "data"):
         self.repo = get_repository()
-        # Default to localhost ComfyUI if no client provided
-        self.image_gen = image_gen or ImageGenerator(base_url="http://127.0.0.1:8188", backend="comfyui")
+        # Default to localhost ComfyUI if no client provided, supporting configuration via environment variables
+        sd_url = os.getenv("STABLE_DIFFUSION_URL") or os.getenv("SD_URL", "http://127.0.0.1:8188")
+        sd_backend = os.getenv("STABLE_DIFFUSION_BACKEND", "comfyui")
+        self.image_gen = image_gen or ImageGenerator(base_url=sd_url, backend=sd_backend)
         self.arc_analyzer = SeasonArcAnalyzer(repository=self.repo)
         self.base_data_dir = base_data_dir
 

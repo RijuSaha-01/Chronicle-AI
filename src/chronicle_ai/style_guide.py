@@ -23,8 +23,14 @@ class CinematicStyleGuide:
             config_path: Path to the style configuration JSON file.
         """
         if config_path is None:
-            # Default to style_config.json in the same directory as this file
-            config_path = os.path.join(os.path.dirname(__file__), "style_config.json")
+            config_path = os.getenv("CHRONICLE_CONFIG_PATH")
+            if not config_path:
+                default_config_dir = os.getenv("CHRONICLE_CONFIG_DIR", "/config")
+                potential_path = os.path.join(default_config_dir, "style_config.json")
+                if os.path.exists(potential_path):
+                    config_path = potential_path
+                else:
+                    config_path = os.path.join(os.path.dirname(__file__), "style_config.json")
         
         self.config_path = config_path
         self.styles = self._load_config()

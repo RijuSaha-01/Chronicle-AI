@@ -256,33 +256,52 @@ Chronicle AI works without Ollama! If the AI server is unavailable:
 
 ---
 
-## 🚢 Deployment
+## 🚢 Deployment & Containerization (Docker)
 
-### Docker
+Chronicle AI is fully containerized, allowing you to run the entire system—including the FastAPI backend, ChromaDB vector search, Ollama LLM, and optional Stable Diffusion (ComfyUI) image generation engine—using a single command.
 
-```bash
-# Build the image
-docker build -t chronicle-ai .
+### ⚡ Quick Start with Docker Compose
 
-# Run the container
-docker run -p 8000:8000 -v $(pwd)/data:/app/data chronicle-ai
-```
-
-### Render / Railway
-
-1. Connect your GitHub repository
-2. Set build command: `pip install -r requirements.txt`
-3. Set start command: `uvicorn chronicle_ai.api:app --host 0.0.0.0 --port $PORT`
-4. Add environment variables if needed
-
-### Environment Variables for Production
+To start all services on any machine (even a fresh machine with no Python or Ollama installed):
 
 ```bash
-OLLAMA_BASE_URL=https://your-ollama-endpoint.com  # If using remote Ollama
-CHRONICLE_EXPORTS_DIR=/data/exports
+docker-compose up -d
 ```
 
-**Note:** For cloud deployment without Ollama, the app will work in "offline mode" with stub narratives.
+This single command will:
+1. Build the optimized, multi-stage `chronicle-app` container (incorporating all dependencies, `ffmpeg` for audio conversion, and SQLite+ChromaDB support).
+2. Start the local `ollama` service.
+3. Automatically download and prepare the `llama3.2` model using the built-in `ollama-model-puller` sidecar.
+4. Launch the optional `stable-diffusion` (ComfyUI) service for beautiful cinematic episode cover generation.
+
+Once ready, visit **http://localhost:8000** in your browser!
+
+### 📁 Volumes & Persistence
+
+The Docker setup maps stateful assets to ensure full data persistence across container restarts:
+
+* `/data` (mapped to `chronicle-data` volume) – Persists the SQLite database (`chronicle_ai.db`), ChromaDB vector embeddings (`/data/chroma`), generated episode images (`/data/images`), and audios (`/data/audio`).
+* `/config` (mapped to local `./config` folder) – Allows overriding bundled settings like custom cinematic styles (`style_config.json`).
+* `/root/.ollama` (mapped to `ollama-data` volume) – Persists downloaded LLM checkpoints (such as Llama 3.2).
+
+### ⚙️ Environment Configuration
+
+You can customize runtime settings through variables in `docker-compose.yml`:
+
+| Environment Variable | Description | Default |
+|----------------------|-------------|---------|
+| `OLLAMA_BASE_URL` | Ollama connection endpoint | `http://ollama:11434` |
+| `OLLAMA_MODEL` | LLM model for story/title generation | `llama3.2` |
+| `STABLE_DIFFUSION_URL`| Stable Diffusion API endpoint | `http://stable-diffusion:8188` |
+| `STABLE_DIFFUSION_BACKEND`| API backend type (`comfyui` or `automatic1111`) | `comfyui` |
+| `CHRONICLE_DATA_DIR` | Base directory for persistent data | `/data` |
+
+### 🚀 Enabling GPU Acceleration (NVIDIA)
+
+To leverage local GPU power for near-instantaneous story analysis and high-quality cover generation:
+1. Open `docker-compose.yml`.
+2. Uncomment the `deploy:` reservation blocks in both the `ollama` and `stable-diffusion` services.
+3. Restart using `docker-compose up -d`.
 
 ---
 

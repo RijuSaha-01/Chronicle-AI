@@ -5,6 +5,7 @@ SQLite-based storage for diary entries with full CRUD operations.
 """
 
 import sqlite3
+import os
 import json
 from pathlib import Path
 from typing import List, Optional
@@ -18,7 +19,7 @@ ENTRY_COLUMNS = "id, date, raw_text, narrative_text, title, title_options, logli
 
 
 # Default database location (can be overridden via environment variable)
-DEFAULT_DB_NAME = "chronicle_ai.db"
+DEFAULT_DB_NAME = os.getenv("CHRONICLE_DB_PATH") or os.path.join(os.getenv("CHRONICLE_DATA_DIR", "."), "chronicle_ai.db")
 
 
 class EntryRepository:

@@ -23,7 +23,7 @@ class EmbeddingEngine:
     Uses sentence-transformers locally or Ollama's embedding endpoint, and ChromaDB for storage.
     """
     
-    def __init__(self, model_name: str = "all-MiniLM-L6-v2", persist_directory: str = "data/chroma", use_ollama: bool = False):
+    def __init__(self, model_name: str = "all-MiniLM-L6-v2", persist_directory: Optional[str] = None, use_ollama: bool = False):
         """
         Initialize the embedding engine.
         
@@ -33,6 +33,9 @@ class EmbeddingEngine:
             use_ollama: If True, use Ollama's embedding endpoint instead of sentence-transformers.
         """
         self.model_name = model_name
+        
+        if persist_directory is None:
+            persist_directory = os.getenv("CHRONICLE_CHROMA_DIR") or os.path.join(os.getenv("CHRONICLE_DATA_DIR", "data"), "chroma")
         self.persist_directory = persist_directory
         self.use_ollama = use_ollama
         

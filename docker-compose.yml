@@ -1,0 +1,99 @@
+version: "3.8"
+
+services:
+  # --- FastAPI Application ---
+  chronicle-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: chronicle-app
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persistent storage volume mapped to internal /data mount point
+      - chronicle-data:/data
+      # Configuration folder volume mapped to internal /config mount point
+      - ./config:/config
+    environment:
+      - PYTHONPATH=/app/src
+      - CHRONICLE_DATA_DIR=/data
+      - CHRONICLE_DB_PATH=/data/chronicle_ai.db
+      - CHRONICLE_CHROMA_DIR=/data/chroma
+      - CHRONICLE_EXPORTS_DIR=/data/exports
+      - CHRONICLE_CONFIG_DIR=/config
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=llama3.2
+      - STABLE_DIFFUSION_URL=http://stable-diffusion:8188
+      - STABLE_DIFFUSION_BACKEND=comfyui
+    depends_on:
+      ollama:
+        condition: service_healthy
+
+  # --- Ollama LLM Service ---
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    # Uncomment the block below to enable GPU acceleration on NVIDIA systems:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  # --- Sidecar to Auto-Pull Ollama Models ---
+  ollama-model-puller:
+    image: curlimages/curl:latest
+    container_name: ollama-model-puller
+    depends_on:
+      ollama:
+        condition: service_healthy
+    entrypoint: >
+      sh -c "
+      echo 'Pulling Llama 3.2 model...' &&
+      curl -X POST http://ollama:11434/api/pull -d '{\"name\": \"llama3.2\"}' &&
+      echo 'Llama 3.2 pulled successfully!'
+      "
+
+  # --- Optional Stable Diffusion (ComfyUI) Service ---
+  # Highly optimized node workflow backend for local image generation.
+  # Set to run on GPU if available.
+  stable-diffusion:
+    image: comfyanonymous/comfyui:latest
+    container_name: stable-diffusion
+    restart: unless-stopped
+    ports:
+      - "8188:8188"
+    volumes:
+      - stable-diffusion-data:/home/comfyui/ComfyUI
+      # Mount local models path if you have downloaded checkpoints:
+      # - ./models/checkpoints:/home/comfyui/ComfyUI/models/checkpoints
+    # Uncomment below to run Stable Diffusion with NVIDIA GPU acceleration:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+volumes:
+  chronicle-data:
+    driver: local
+  ollama-data:
+    driver: local
+  stable-diffusion-data:
+    driver: local
