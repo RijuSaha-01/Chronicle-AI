@@ -19,7 +19,7 @@ Chronicle AI features a **Premium Dark** visual aesthetic with gold accents, dee
 
 ---
 
-## ✨ Feature Highlight
+## ✨ Feature Highlights
 
 - **📝 Structured Guided Mode**: Interactive prompts split your entries into morning, afternoon, and night reflections for rich narrative context.
 - **🤖 Local Cinematic Engine**: AI-generated stories, loglines, and title suggestions powered offline by Meta's Llama 3.2 via Ollama.
