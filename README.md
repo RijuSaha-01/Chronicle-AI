@@ -6,7 +6,7 @@ Chronicle AI bridges the gap between daily journaling, habit tracking, and cinem
 
 ---
 
-## 🖼️ Project Overview & Screenshots
+## 🖼️ Project Overview & Screenshots:-
 
 Chronicle AI features a **Premium Dark** visual aesthetic with gold accents, deep glassmorphism panels, and a smooth, responsive single-page web interface.
 
