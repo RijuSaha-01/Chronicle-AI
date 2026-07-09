@@ -30,7 +30,7 @@ Chronicle AI features a **Premium Dark** visual aesthetic with gold accents, dee
 
 ---
 
-## 🚀 Quick Start (5 Minutes
+## 🚀 Quick Start (5 Minutes)
 
 Get Chronicle AI up and running locally in three simple steps:
 
